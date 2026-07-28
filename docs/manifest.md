@@ -133,3 +133,28 @@ general-purpose scorer. Context reuses the search ranking and adds matching
 body lines without exceeding the manifest's content-character budget. When a
 matching body line is absent, `fallbackToTitle` controls whether the note title
 is returned as a fallback snippet.
+
+Context may also group ranked notes without changing search scoring:
+
+```json
+{
+  "context": {
+    "grouping": {
+      "fields": ["topic", "ticket"],
+      "pathToken": "ticket",
+      "statusField": "status",
+      "inactiveStatuses": ["archived", "superseded"],
+      "freshnessFields": ["updated", "created"],
+      "notesPerGroup": 2
+    }
+  }
+}
+```
+
+The first non-empty configured field becomes the group key. The built-in
+`ticket` path token recognizes conventional uppercase ticket IDs and
+`adhoc-YYYY-MM-DD-*` IDs; notes without either fall back to their own path.
+Groups rank by their best search hit. Within a group, non-inactive notes come
+first, followed by the freshest ISO date, score, and path. The response keeps
+both the freshness-selected `representative` and a distinct relevance-selected
+`topMatch` when needed.

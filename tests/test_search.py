@@ -166,3 +166,91 @@ def test_context_can_disable_title_fallback(make_vault) -> None:
     result = scan_vault(root)
 
     assert context(result, "routing").hits[0].snippets == ()
+
+
+def test_context_groups_by_fields_ticket_paths_and_freshness(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "zones": [
+                    {
+                        "source": "body",
+                        "weight": 1,
+                        "countCap": 6,
+                    }
+                ]
+            },
+            "context": {
+                "fallbackToTitle": False,
+                "grouping": {
+                    "fields": ["topic", "jira"],
+                    "pathToken": "ticket",
+                    "statusField": "status",
+                    "inactiveStatuses": ["archived", "superseded"],
+                    "freshnessFields": ["updated", "created"],
+                    "notesPerGroup": 1,
+                },
+            },
+        },
+        notes={
+            "notes/ABC-1-current.md": (
+                "---\n"
+                "topic: ABC-1\n"
+                "status: active\n"
+                "updated: 2026-01-01\n"
+                "tags: []\n"
+                "related: []\n"
+                "---\n"
+                "# Current\n\n"
+                "query\n"
+            ),
+            "notes/ABC-1-history.md": (
+                "---\n"
+                "topic: ABC-1\n"
+                "status: archived\n"
+                "updated: 2026-03-01\n"
+                "tags: []\n"
+                "related: []\n"
+                "---\n"
+                "# History\n\n"
+                "query query query query query query\n"
+            ),
+            "notes/ABC-2.md": (
+                "---\n"
+                "status: active\n"
+                "updated: 2026-02-01\n"
+                "tags: []\n"
+                "related: []\n"
+                "---\n"
+                "# Ticket path\n\n"
+                "query\n"
+            ),
+            "notes/misc.md": (
+                "---\n"
+                "status: active\n"
+                "updated: 2026-02-01\n"
+                "tags: []\n"
+                "related: []\n"
+                "---\n"
+                "# Misc\n\n"
+                "query\n"
+            ),
+        },
+    )
+    result = scan_vault(root)
+
+    selected = context(result, "query")
+
+    assert [group.key for group in selected.groups] == [
+        "ABC-1",
+        "ABC-2",
+        "notes/misc.md",
+    ]
+    first = selected.groups[0]
+    assert first.count == 2
+    assert first.representative == "notes/ABC-1-current.md"
+    assert first.top_match == "notes/ABC-1-history.md"
+    assert [hit.path for hit in first.hits] == ["notes/ABC-1-current.md"]
+    assert selected.hits == tuple(
+        hit for group in selected.groups for hit in group.hits
+    )

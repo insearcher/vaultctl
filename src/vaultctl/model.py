@@ -125,8 +125,29 @@ class SearchHit:
 
 
 @dataclass(frozen=True)
+class ContextGroup:
+    key: str
+    score: int
+    count: int
+    representative: str
+    top_match: str | None
+    hits: tuple[SearchHit, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "key": self.key,
+            "score": self.score,
+            "count": self.count,
+            "representative": self.representative,
+            "topMatch": self.top_match,
+            "hits": [hit.to_dict() for hit in self.hits],
+        }
+
+
+@dataclass(frozen=True)
 class ContextResult:
     hits: tuple[SearchHit, ...]
+    groups: tuple[ContextGroup, ...]
     max_characters: int
     used_characters: int
     truncated: bool

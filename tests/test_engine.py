@@ -290,6 +290,27 @@ def test_manifest_limit_defaults_cannot_exceed_maximum(make_vault) -> None:
     assert "context.defaultLimit cannot exceed context.maxLimit" in message
 
 
+def test_context_grouping_requires_a_key_source(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "context": {
+                "grouping": {
+                    "notesPerGroup": 2,
+                }
+            }
+        }
+    )
+
+    try:
+        load_manifest(root)
+    except Exception as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("context grouping unexpectedly accepted no key source")
+
+    assert "context.grouping" in message
+
+
 def test_acyclic_relation_detects_a_cycle(make_vault) -> None:
     root = make_vault(
         manifest_overrides={

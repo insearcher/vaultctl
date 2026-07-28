@@ -140,6 +140,7 @@ def _context_payload(
             "truncated": context_result.truncated,
         },
         "hits": [hit.to_dict() for hit in context_result.hits],
+        "groups": [group.to_dict() for group in context_result.groups],
         "issues": [issue.to_dict() for issue in result.issues],
     }
 
@@ -202,9 +203,18 @@ def _render_text(payload: dict[str, Any]) -> str:
         if not payload["hits"]:
             return "No context hits."
         lines = []
-        for hit in payload["hits"]:
-            lines.append(f"- {hit['path']} ({hit['score']}) — {hit['title']}")
-            lines.extend(f"  {snippet}" for snippet in hit["snippets"])
+        if payload["groups"]:
+            for group in payload["groups"]:
+                lines.append(
+                    f"▸ {group['key']} (score {group['score']}, notes {group['count']})"
+                )
+                for hit in group["hits"]:
+                    lines.append(f"  - {hit['path']} ({hit['score']}) — {hit['title']}")
+                    lines.extend(f"    {snippet}" for snippet in hit["snippets"])
+        else:
+            for hit in payload["hits"]:
+                lines.append(f"- {hit['path']} ({hit['score']}) — {hit['title']}")
+                lines.extend(f"  {snippet}" for snippet in hit["snippets"])
         budget = payload["budget"]
         lines.append(
             f"context characters: {budget['usedCharacters']}/{budget['maxCharacters']}"

@@ -210,6 +210,67 @@
         "fallbackToTitle": {
           "type": "boolean",
           "default": true
+        },
+        "grouping": {
+          "$ref": "#/$defs/contextGrouping"
+        }
+      }
+    },
+    "contextGrouping": {
+      "type": "object",
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "fields"
+          ]
+        },
+        {
+          "required": [
+            "pathToken"
+          ]
+        }
+      ],
+      "properties": {
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "pathToken": {
+          "const": "ticket"
+        },
+        "statusField": {
+          "type": "string",
+          "minLength": 1,
+          "default": "status"
+        },
+        "inactiveStatuses": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "freshnessFields": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "notesPerGroup": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 2
         }
       }
     },

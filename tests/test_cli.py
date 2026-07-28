@@ -82,7 +82,39 @@ def test_search_and_context_emit_versioned_json(make_vault, capsys) -> None:
     assert context_exit == 0
     assert context_payload["schemaVersion"] == "vaultctl.context/v1"
     assert context_payload["hits"][0]["snippets"] == ["Release planning details."]
+    assert context_payload["groups"] == []
     assert context_payload["budget"]["truncated"] is False
+
+
+def test_context_emits_group_contract(make_vault, capsys) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "context": {
+                "grouping": {
+                    "fields": ["topic"],
+                }
+            }
+        },
+        notes={
+            "notes/example.md": (
+                "---\n"
+                "topic: example-group\n"
+                "tags: []\n"
+                "related: []\n"
+                "---\n"
+                "# Example\n\n"
+                "Grouped query.\n"
+            )
+        },
+    )
+
+    exit_code = main(["--vault", str(root), "context", "grouped"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["groups"][0]["key"] == "example-group"
+    assert payload["groups"][0]["representative"] == "notes/example.md"
+    assert payload["groups"][0]["topMatch"] is None
 
 
 def test_search_limit_error_uses_error_contract(make_vault, capsys) -> None:
