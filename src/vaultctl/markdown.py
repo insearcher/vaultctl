@@ -15,6 +15,12 @@ from vaultctl.errors import MarkdownError
 HEADING_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 WIKILINK_RE = re.compile(r"!?\[\[([^\]]+)\]\]")
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
+FENCED_CODE_RE = re.compile(
+    r"^ {0,3}(?:```|~~~).*?^ {0,3}(?:```|~~~)[ \t]*$",
+    re.MULTILINE | re.DOTALL,
+)
+INLINE_CODE_RE = re.compile(r"`+[^`\n]*`+")
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -88,10 +94,16 @@ def parse_markdown(path: Path, *, display_path: str) -> ParsedMarkdown:
 
 
 def extract_body_links(body: str) -> tuple[tuple[str, str], ...]:
+    searchable = FENCED_CODE_RE.sub("", body)
+    searchable = INLINE_CODE_RE.sub("", searchable)
+    searchable = HTML_COMMENT_RE.sub("", searchable)
     links: list[tuple[str, str]] = []
-    links.extend((match.group(1), "wikilink") for match in WIKILINK_RE.finditer(body))
     links.extend(
-        (match.group(1), "markdown-link") for match in MARKDOWN_LINK_RE.finditer(body)
+        (match.group(1), "wikilink") for match in WIKILINK_RE.finditer(searchable)
+    )
+    links.extend(
+        (match.group(1), "markdown-link")
+        for match in MARKDOWN_LINK_RE.finditer(searchable)
     )
     return tuple(links)
 

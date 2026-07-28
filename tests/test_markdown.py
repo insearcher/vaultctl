@@ -31,6 +31,17 @@ def test_link_extraction_ignores_images() -> None:
     )
 
 
+def test_link_extraction_ignores_code_and_comments() -> None:
+    links = extract_body_links(
+        "Keep [[real]].\n"
+        "`[[inline-example]]`\n"
+        "```yaml\nparent: '[[fenced-example]]'\n```\n"
+        "<!-- [[comment-example]] -->\n"
+    )
+
+    assert links == (("real", "wikilink"),)
+
+
 def test_tags_are_normalized_without_duplicates() -> None:
     assert normalize_tags(["#guide", "guide", " planning "]) == (
         "guide",
