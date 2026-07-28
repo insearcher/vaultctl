@@ -182,9 +182,11 @@ def test_context_groups_by_fields_ticket_paths_and_freshness(make_vault) -> None
             },
             "context": {
                 "fallbackToTitle": False,
+                "outputFields": ["status", "updated"],
                 "grouping": {
                     "fields": ["topic", "jira"],
                     "pathToken": "ticket",
+                    "keyCase": "upper",
                     "statusField": "status",
                     "inactiveStatuses": ["archived", "superseded"],
                     "freshnessFields": ["updated", "created"],
@@ -193,9 +195,9 @@ def test_context_groups_by_fields_ticket_paths_and_freshness(make_vault) -> None
             },
         },
         notes={
-            "notes/ABC-1-current.md": (
+            "notes/abc-1-current.md": (
                 "---\n"
-                "topic: ABC-1\n"
+                "topic: abc-1\n"
                 "status: active\n"
                 "updated: 2026-01-01\n"
                 "tags: []\n"
@@ -215,7 +217,7 @@ def test_context_groups_by_fields_ticket_paths_and_freshness(make_vault) -> None
                 "# History\n\n"
                 "query query query query query query\n"
             ),
-            "notes/ABC-2.md": (
+            "notes/abc-2-follow-up.md": (
                 "---\n"
                 "status: active\n"
                 "updated: 2026-02-01\n"
@@ -248,9 +250,13 @@ def test_context_groups_by_fields_ticket_paths_and_freshness(make_vault) -> None
     ]
     first = selected.groups[0]
     assert first.count == 2
-    assert first.representative == "notes/ABC-1-current.md"
+    assert first.representative == "notes/abc-1-current.md"
     assert first.top_match == "notes/ABC-1-history.md"
-    assert [hit.path for hit in first.hits] == ["notes/ABC-1-current.md"]
+    assert [hit.path for hit in first.hits] == ["notes/abc-1-current.md"]
+    assert first.hits[0].properties == {
+        "status": "active",
+        "updated": "2026-01-01",
+    }
     assert selected.hits == tuple(
         hit for group in selected.groups for hit in group.hits
     )

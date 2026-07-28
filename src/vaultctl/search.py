@@ -13,8 +13,8 @@ from vaultctl.model import ContextGroup, ContextResult, Node, ScanResult, Search
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 TICKET_RE = re.compile(
-    r"\b(?:[A-Z][A-Z0-9]+-\d+(?:-[A-Za-z0-9]+)?|"
-    r"adhoc-\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+)\b"
+    r"\b(adhoc-\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+|"
+    r"[A-Za-z]{2,}-\d+)\b"
 )
 DEFAULT_STOP_WORDS = frozenset(
     {
@@ -242,15 +242,25 @@ def _snippets(
     return tuple(snippets)
 
 
+def _normalize_group_key(value: str, config: dict[str, Any]) -> str:
+    key_case = config.get("keyCase", "preserve")
+    if key_case == "upper":
+        return value.upper()
+    if key_case == "lower":
+        return value.lower()
+    return value
+
+
 def _group_key(node: Node, config: dict[str, Any]) -> str:
     for field in config.get("fields", ()):
         value = node.properties.get(field)
         if isinstance(value, str) and value.strip():
-            return value.strip()
+            return _normalize_group_key(value.strip(), config)
     if config.get("pathToken") == "ticket":
-        match = TICKET_RE.search(node.path)
-        if match is not None:
-            return match.group(0)
+        for segment in PurePosixPath(node.path).parts:
+            match = TICKET_RE.search(segment)
+            if match is not None:
+                return _normalize_group_key(match.group(1), config)
     return node.path
 
 
@@ -313,6 +323,7 @@ def _context_hit(
     snippet_lines: int,
     snippet_characters: int,
     fallback_to_title: bool,
+    output_fields: tuple[str, ...],
 ) -> SearchHit:
     return SearchHit(
         node_id=hit.node_id,
@@ -328,6 +339,11 @@ def _context_hit(
             max_characters=snippet_characters,
             fallback_to_title=fallback_to_title,
         ),
+        properties={
+            field: node.properties[field]
+            for field in output_fields
+            if field in node.properties
+        },
     )
 
 
@@ -356,6 +372,7 @@ def context(
     snippet_lines = config.get("snippetLines", DEFAULT_SNIPPET_LINES)
     snippet_characters = config.get("snippetCharacters", DEFAULT_SNIPPET_CHARACTERS)
     fallback_to_title = config.get("fallbackToTitle", True)
+    output_fields = tuple(config.get("outputFields", ()))
     tokens = tokenize(query, stop_words=_stop_words(result))
     nodes = {node.id: node for node in result.nodes}
     ranked_hits = _rank(result, query)
@@ -379,6 +396,7 @@ def context(
                     snippet_lines=snippet_lines,
                     snippet_characters=snippet_characters,
                     fallback_to_title=fallback_to_title,
+                    output_fields=output_fields,
                 )
                 cost = _hit_cost(rendered)
                 if used + cost > max_characters:
@@ -411,6 +429,7 @@ def context(
                 snippet_lines=snippet_lines,
                 snippet_characters=snippet_characters,
                 fallback_to_title=fallback_to_title,
+                output_fields=output_fields,
             )
             cost = _hit_cost(rendered)
             if used + cost > max_characters:

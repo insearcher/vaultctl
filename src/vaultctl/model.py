@@ -111,6 +111,7 @@ class SearchHit:
     score: int
     matched_zones: tuple[str, ...]
     snippets: tuple[str, ...] = ()
+    properties: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -121,6 +122,7 @@ class SearchHit:
             "score": self.score,
             "matchedZones": list(self.matched_zones),
             "snippets": list(self.snippets),
+            "properties": self.properties,
         }
 
 

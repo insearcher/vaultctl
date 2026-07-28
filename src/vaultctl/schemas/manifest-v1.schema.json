@@ -211,6 +211,14 @@
           "type": "boolean",
           "default": true
         },
+        "outputFields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
         "grouping": {
           "$ref": "#/$defs/contextGrouping"
         }
@@ -243,6 +251,14 @@
         },
         "pathToken": {
           "const": "ticket"
+        },
+        "keyCase": {
+          "enum": [
+            "preserve",
+            "upper",
+            "lower"
+          ],
+          "default": "preserve"
         },
         "statusField": {
           "type": "string",
