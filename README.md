@@ -5,7 +5,8 @@ Notes remain ordinary Markdown files; a declarative manifest describes node
 kinds, fields, tags, and typed relations.
 
 > **Status:** pre-alpha and read-only. The current release can scan, validate,
-> and export a graph. It does not modify vault contents.
+> export a graph, search, and assemble bounded context. It does not modify
+> vault contents.
 
 ## Why
 
@@ -24,6 +25,8 @@ python -m pip install -e .
 vaultctl --vault examples/basic-vault scan
 vaultctl --vault examples/basic-vault validate
 vaultctl --vault examples/basic-vault graph export
+vaultctl --vault examples/basic-vault search "release plan"
+vaultctl --vault examples/basic-vault context "release plan"
 vaultctl --vault examples/basic-vault doctor
 ```
 
@@ -48,6 +51,8 @@ modules.
 | `scan` | Normalize Markdown files into versioned node and edge JSON |
 | `validate` | Check the manifest, note schemas, and graph relations |
 | `graph export` | Export a compact versioned graph |
+| `search` | Rank notes with manifest-defined zones |
+| `context` | Return ranked notes and snippets within an output budget |
 | `doctor` | Check vault discovery and available execution backends |
 
 All machine-readable output includes a schema version. See

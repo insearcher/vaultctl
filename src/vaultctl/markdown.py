@@ -13,7 +13,8 @@ from ruamel.yaml import YAML
 
 from vaultctl.errors import MarkdownError
 
-HEADING_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
+H1_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
+HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*$", re.MULTILINE)
 WIKILINK_RE = re.compile(r"!?\[\[([^\]]+)\]\]")
 MARKDOWN_LINK_RE = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 FENCED_CODE_RE = re.compile(
@@ -33,6 +34,7 @@ class ParsedMarkdown:
     properties: dict[str, Any]
     body: str
     title: str
+    headings: tuple[str, ...]
     source_hash: str
 
 
@@ -133,12 +135,14 @@ def parse_markdown(
         properties = _to_plain(loaded)
         body = "".join(lines[closing_index + 1 :])
 
-    heading = HEADING_RE.search(body)
-    title = heading.group(1).strip() if heading else path.stem
+    headings = tuple(match.group(1).strip() for match in HEADING_RE.finditer(body))
+    h1 = H1_RE.search(body)
+    title = h1.group(1).strip() if h1 else path.stem
     return ParsedMarkdown(
         properties=properties,
         body=body,
         title=title,
+        headings=headings,
         source_hash=hashlib.sha256(raw).hexdigest(),
     )
 

@@ -71,6 +71,28 @@ def load_manifest(root: Path) -> VaultManifest:
                 f"relation {relation_name!r} references unknown target kinds: {joined}"
             )
 
+    for index, zone in enumerate(data.get("search", {}).get("zones", ())):
+        has_field = "field" in zone
+        if zone["source"] == "property" and not has_field:
+            raise ManifestError(f"search.zones.{index}: property source requires field")
+        if zone["source"] != "property" and has_field:
+            raise ManifestError(
+                f"search.zones.{index}: field is only valid for property source"
+            )
+
+    limit_defaults = {
+        "search": (20, 100),
+        "context": (8, 20),
+    }
+    for section_name, (default_fallback, max_fallback) in limit_defaults.items():
+        section = data.get(section_name, {})
+        default_limit = section.get("defaultLimit", default_fallback)
+        max_limit = section.get("maxLimit", max_fallback)
+        if default_limit > max_limit:
+            raise ManifestError(
+                f"{section_name}.defaultLimit cannot exceed {section_name}.maxLimit"
+            )
+
     return VaultManifest(
         api_version=data["apiVersion"],
         vault_id=data["vaultId"],

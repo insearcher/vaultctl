@@ -247,6 +247,49 @@ def test_unknown_manifest_fields_fail_closed(make_vault) -> None:
     assert "shellHook" in message
 
 
+def test_property_search_zone_requires_a_field(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "zones": [
+                    {
+                        "source": "property",
+                        "weight": 10,
+                    }
+                ]
+            }
+        }
+    )
+
+    try:
+        load_manifest(root)
+    except Exception as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("property search zone unexpectedly accepted no field")
+
+    assert "property source requires field" in message
+
+
+def test_manifest_limit_defaults_cannot_exceed_maximum(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "context": {
+                "maxLimit": 4,
+            }
+        }
+    )
+
+    try:
+        load_manifest(root)
+    except Exception as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("inconsistent context limits were accepted")
+
+    assert "context.defaultLimit cannot exceed context.maxLimit" in message
+
+
 def test_acyclic_relation_detects_a_cycle(make_vault) -> None:
     root = make_vault(
         manifest_overrides={

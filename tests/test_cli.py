@@ -59,3 +59,50 @@ def test_missing_manifest_is_a_user_error(tmp_path: Path, capsys) -> None:
     assert exit_code == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["schemaVersion"] == "vaultctl.error/v1"
+
+
+def test_search_and_context_emit_versioned_json(make_vault, capsys) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\nRelease planning details.\n"
+            )
+        }
+    )
+
+    search_exit = main(["--vault", str(root), "search", "release"])
+    search_payload = json.loads(capsys.readouterr().out)
+    context_exit = main(["--vault", str(root), "context", "release"])
+    context_payload = json.loads(capsys.readouterr().out)
+
+    assert search_exit == 0
+    assert search_payload["schemaVersion"] == "vaultctl.search/v1"
+    assert search_payload["hits"][0]["path"] == "notes/example.md"
+    assert context_exit == 0
+    assert context_payload["schemaVersion"] == "vaultctl.context/v1"
+    assert context_payload["hits"][0]["snippets"] == ["Release planning details."]
+    assert context_payload["budget"]["truncated"] is False
+
+
+def test_search_limit_error_uses_error_contract(make_vault, capsys) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "defaultLimit": 1,
+                "maxLimit": 1,
+            }
+        },
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n# Example\nSearchable.\n"
+            )
+        },
+    )
+
+    exit_code = main(["--vault", str(root), "search", "searchable", "--limit", "2"])
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schemaVersion"] == "vaultctl.error/v1"
+    assert "exceeds manifest maxLimit" in payload["error"]

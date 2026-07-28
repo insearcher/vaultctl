@@ -8,3 +8,7 @@ class ManifestError(VaultctlError):
 
 class MarkdownError(VaultctlError):
     """A Markdown document cannot be parsed safely."""
+
+
+class QueryError(VaultctlError):
+    """A search or context query violates its manifest contract."""
