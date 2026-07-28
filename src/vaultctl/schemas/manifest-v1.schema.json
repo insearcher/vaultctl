@@ -206,6 +206,10 @@
           "minimum": 32,
           "maximum": 4000,
           "default": 220
+        },
+        "fallbackToTitle": {
+          "type": "boolean",
+          "default": true
         }
       }
     },

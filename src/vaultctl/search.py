@@ -143,7 +143,7 @@ def _score_node(
         for token in tokens:
             count = min(text.count(token), zone.get("countCap", 1))
             zone_score += count * zone["weight"]
-        if phrase and phrase in text:
+        if tokens and phrase and phrase in text:
             zone_score += zone.get("phraseWeight", 0)
         if zone_score:
             score += zone_score
@@ -205,6 +205,7 @@ def _snippets(
     tokens: tuple[str, ...],
     max_lines: int,
     max_characters: int,
+    fallback_to_title: bool,
 ) -> tuple[str, ...]:
     if max_lines == 0:
         return ()
@@ -219,7 +220,7 @@ def _snippets(
         snippets.append(line[:max_characters])
         if len(snippets) >= max_lines:
             break
-    if not snippets and node.title:
+    if not snippets and fallback_to_title and node.title:
         snippets.append(node.title[:max_characters])
     return tuple(snippets)
 
@@ -244,6 +245,7 @@ def context(
     max_characters = config.get("maxCharacters", DEFAULT_CONTEXT_CHARACTERS)
     snippet_lines = config.get("snippetLines", DEFAULT_SNIPPET_LINES)
     snippet_characters = config.get("snippetCharacters", DEFAULT_SNIPPET_CHARACTERS)
+    fallback_to_title = config.get("fallbackToTitle", True)
     tokens = tokenize(query, stop_words=_stop_words(result))
     search_hits = _rank(result, query)[:resolved_limit]
     nodes = {node.id: node for node in result.nodes}
@@ -257,6 +259,7 @@ def context(
             tokens=tokens,
             max_lines=snippet_lines,
             max_characters=snippet_characters,
+            fallback_to_title=fallback_to_title,
         )
         cost = len(hit.path) + len(hit.title) + sum(len(item) for item in snippets)
         if used + cost > max_characters:

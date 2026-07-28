@@ -106,3 +106,24 @@ def test_search_limit_error_uses_error_contract(make_vault, capsys) -> None:
     payload = json.loads(capsys.readouterr().out)
     assert payload["schemaVersion"] == "vaultctl.error/v1"
     assert "exceeds manifest maxLimit" in payload["error"]
+
+
+def test_stopword_only_search_and_context_are_no_hit(make_vault, capsys) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\nAnd then there were none.\n"
+            )
+        }
+    )
+
+    search_exit = main(["--vault", str(root), "search", "and"])
+    search_payload = json.loads(capsys.readouterr().out)
+    context_exit = main(["--vault", str(root), "context", "and"])
+    context_payload = json.loads(capsys.readouterr().out)
+
+    assert search_exit == 1
+    assert search_payload["hits"] == []
+    assert context_exit == 1
+    assert context_payload["hits"] == []

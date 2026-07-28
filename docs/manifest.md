@@ -119,7 +119,8 @@ adds `phraseWeight` for the complete query phrase.
     "maxLimit": 20,
     "maxCharacters": 12000,
     "snippetLines": 2,
-    "snippetCharacters": 220
+    "snippetCharacters": 220,
+    "fallbackToTitle": true
   }
 }
 ```
@@ -129,4 +130,6 @@ Available zone sources are `title`, `stem`, `path`, `tags`, `property`,
 
 When no search configuration is present, `vaultctl` uses a stable built-in
 general-purpose scorer. Context reuses the search ranking and adds matching
-body lines without exceeding the manifest's content-character budget.
+body lines without exceeding the manifest's content-character budget. When a
+matching body line is absent, `fallbackToTitle` controls whether the note title
+is returned as a fallback snippet.

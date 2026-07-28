@@ -126,3 +126,43 @@ def test_empty_query_is_a_user_error(make_vault) -> None:
 
     with pytest.raises(QueryError, match="query is empty"):
         search(result, "  ")
+
+
+def test_stopword_only_query_has_no_search_or_context_hits(make_vault) -> None:
+    result = scan_vault(_search_vault(make_vault))
+
+    assert search(result, "when") == ()
+    assert context(result, "when").hits == ()
+
+
+def test_context_can_disable_title_fallback(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "zones": [
+                    {
+                        "source": "property",
+                        "field": "description",
+                        "weight": 10,
+                    }
+                ]
+            },
+            "context": {
+                "fallbackToTitle": False,
+            },
+        },
+        notes={
+            "notes/example.md": (
+                "---\n"
+                "description: routing\n"
+                "tags: []\n"
+                "related: []\n"
+                "---\n"
+                "# Example\n\n"
+                "No matching body line.\n"
+            )
+        },
+    )
+    result = scan_vault(root)
+
+    assert context(result, "routing").hits[0].snippets == ()
