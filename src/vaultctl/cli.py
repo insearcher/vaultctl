@@ -12,7 +12,9 @@ from vaultctl import __version__
 from vaultctl.engine import scan_vault
 from vaultctl.errors import VaultctlError
 from vaultctl.manifest import load_manifest, resolve_vault_root
-from vaultctl.model import ScanResult
+from vaultctl.model import ContextResult, ScanResult, SearchHit
+from vaultctl.search import context as build_context
+from vaultctl.search import search as search_nodes
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -37,6 +39,17 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("scan", help="Normalize notes into nodes and edges.")
     commands.add_parser("validate", help="Validate manifest, notes, and graph.")
     commands.add_parser("doctor", help="Inspect vault and backend availability.")
+
+    search = commands.add_parser("search", help="Rank notes for a text query.")
+    search.add_argument("query")
+    search.add_argument("--limit", type=int)
+
+    context = commands.add_parser(
+        "context",
+        help="Return ranked notes and snippets within the manifest budget.",
+    )
+    context.add_argument("query")
+    context.add_argument("--limit", type=int)
 
     graph = commands.add_parser("graph", help="Graph operations.")
     graph_commands = graph.add_subparsers(dest="graph_command", required=True)
@@ -92,6 +105,45 @@ def _graph_payload(result: ScanResult) -> dict[str, Any]:
     }
 
 
+def _search_payload(
+    result: ScanResult,
+    *,
+    query: str,
+    hits: tuple[SearchHit, ...],
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": "vaultctl.search/v1",
+        "vaultId": result.manifest.vault_id,
+        "root": str(result.manifest.root),
+        "valid": not result.errors,
+        "query": query,
+        "hits": [hit.to_dict() for hit in hits],
+        "issues": [issue.to_dict() for issue in result.issues],
+    }
+
+
+def _context_payload(
+    result: ScanResult,
+    *,
+    query: str,
+    context_result: ContextResult,
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": "vaultctl.context/v1",
+        "vaultId": result.manifest.vault_id,
+        "root": str(result.manifest.root),
+        "valid": not result.errors,
+        "query": query,
+        "budget": {
+            "maxCharacters": context_result.max_characters,
+            "usedCharacters": context_result.used_characters,
+            "truncated": context_result.truncated,
+        },
+        "hits": [hit.to_dict() for hit in context_result.hits],
+        "issues": [issue.to_dict() for issue in result.issues],
+    }
+
+
 def _doctor_payload(root: Path) -> dict[str, Any]:
     manifest = load_manifest(root)
     return {
@@ -139,6 +191,25 @@ def _render_text(payload: dict[str, Any]) -> str:
         return (
             f"graph: {len(payload['nodes'])} node(s), {len(payload['edges'])} edge(s)"
         )
+    if schema == "vaultctl.search/v1":
+        if not payload["hits"]:
+            return "No hits."
+        return "\n".join(
+            f"{hit['score']:>4}  {hit['path']} — {hit['title']}"
+            for hit in payload["hits"]
+        )
+    if schema == "vaultctl.context/v1":
+        if not payload["hits"]:
+            return "No context hits."
+        lines = []
+        for hit in payload["hits"]:
+            lines.append(f"- {hit['path']} ({hit['score']}) — {hit['title']}")
+            lines.extend(f"  {snippet}" for snippet in hit["snippets"])
+        budget = payload["budget"]
+        lines.append(
+            f"context characters: {budget['usedCharacters']}/{budget['maxCharacters']}"
+        )
+        return "\n".join(lines)
     return (
         f"scan: {len(payload['nodes'])} node(s), "
         f"{len(payload['edges'])} edge(s), "
@@ -167,10 +238,24 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload = _scan_payload(result)
         elif args.command == "validate":
             payload = _validation_payload(result)
+        elif args.command == "search":
+            hits = search_nodes(result, args.query, limit=args.limit)
+            payload = _search_payload(result, query=args.query, hits=hits)
+        elif args.command == "context":
+            context_result = build_context(result, args.query, limit=args.limit)
+            payload = _context_payload(
+                result,
+                query=args.query,
+                context_result=context_result,
+            )
         else:
             payload = _graph_payload(result)
         _emit(payload, args.format)
-        return 1 if result.errors else 0
+        if result.errors:
+            return 1
+        if args.command in {"search", "context"} and not payload["hits"]:
+            return 1
+        return 0
     except VaultctlError as exc:
         if args.format == "json":
             print(

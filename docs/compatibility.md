@@ -10,6 +10,8 @@ Current schemas:
 | `validate` | `vaultctl.validate/v1` |
 | `graph export` | `vaultctl.graph/v1` |
 | `doctor` | `vaultctl.doctor/v1` |
+| `search` | `vaultctl.search/v1` |
+| `context` | `vaultctl.context/v1` |
 
 Consumers must check `schemaVersion` instead of inferring compatibility from
 the CLI version.

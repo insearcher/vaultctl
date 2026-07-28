@@ -34,6 +34,8 @@ class Node:
     properties: dict[str, Any]
     tags: tuple[str, ...]
     source_hash: str
+    body: str = field(default="", repr=False)
+    headings: tuple[str, ...] = field(default=(), repr=False)
     outgoing_edges: tuple[Edge, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -98,6 +100,36 @@ class ScanResult:
     @property
     def warnings(self) -> tuple[ValidationIssue, ...]:
         return tuple(issue for issue in self.issues if issue.level == "warning")
+
+
+@dataclass(frozen=True)
+class SearchHit:
+    node_id: str
+    path: str
+    kind: str
+    title: str
+    score: int
+    matched_zones: tuple[str, ...]
+    snippets: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.node_id,
+            "path": self.path,
+            "kind": self.kind,
+            "title": self.title,
+            "score": self.score,
+            "matchedZones": list(self.matched_zones),
+            "snippets": list(self.snippets),
+        }
+
+
+@dataclass(frozen=True)
+class ContextResult:
+    hits: tuple[SearchHit, ...]
+    max_characters: int
+    used_characters: int
+    truncated: bool
 
 
 @dataclass(frozen=True)

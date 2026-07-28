@@ -423,6 +423,8 @@ def scan_vault(root: Path) -> ScanResult:
             properties=parsed.properties,
             tags=tags,
             source_hash=parsed.source_hash,
+            body=parsed.body,
+            headings=parsed.headings,
         )
         issues.extend(_validate_fields(node, manifest))
         pending.append(_PendingNode(node=node, body=parsed.body))

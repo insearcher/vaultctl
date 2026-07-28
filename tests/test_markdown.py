@@ -20,6 +20,7 @@ def test_frontmatter_parses_block_lists_and_dates(tmp_path) -> None:
         "published": "2026-01-02",
     }
     assert parsed.title == "Example"
+    assert parsed.headings == ("Example",)
     assert len(parsed.source_hash) == 64
 
 
