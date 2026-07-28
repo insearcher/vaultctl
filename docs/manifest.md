@@ -63,3 +63,21 @@ relative Markdown links, or unambiguous note names.
 
 The v1 manifest is intentionally small. Search policy, write policy, templates,
 and projections will be added only with the feature that consumes them.
+
+## Frontmatter compatibility
+
+Frontmatter is strict YAML by default. A vault migrating from a line-oriented
+legacy parser may opt into one narrow compatibility rule:
+
+```json
+{
+  "frontmatter": {
+    "allowLegacyColonScalars": true
+  }
+}
+```
+
+When strict parsing fails, this permits an unquoted top-level scalar containing
+`: `, such as `description: Use when route: fallback`. Structured values,
+nested mappings, and all other YAML errors remain strict. New vaults should
+quote such scalars instead of enabling this option.

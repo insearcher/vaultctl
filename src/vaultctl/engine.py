@@ -391,7 +391,11 @@ def scan_vault(root: Path) -> ScanResult:
             )
             continue
         try:
-            parsed = parse_markdown(path, display_path=relative)
+            parsed = parse_markdown(
+                path,
+                display_path=relative,
+                allow_legacy_colon_scalars=manifest.allow_legacy_colon_scalars,
+            )
         except MarkdownError as exc:
             issues.append(
                 ValidationIssue(
