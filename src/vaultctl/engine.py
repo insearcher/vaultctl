@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import fnmatch
 import posixpath
 import re
 from dataclasses import dataclass, replace
@@ -29,7 +28,30 @@ class _PendingNode:
 
 
 def _is_ignored(path: str, patterns: tuple[str, ...]) -> bool:
-    return any(fnmatch.fnmatch(path, pattern) for pattern in patterns)
+    return any(_path_matches(path, pattern) for pattern in patterns)
+
+
+def _path_matches(path: str, pattern: str) -> bool:
+    """Match vault-relative paths with *, ?, and directory-aware **."""
+    expression = []
+    index = 0
+    while index < len(pattern):
+        if pattern.startswith("**/", index):
+            expression.append("(?:.*/)?")
+            index += 3
+        elif pattern.startswith("**", index):
+            expression.append(".*")
+            index += 2
+        elif pattern[index] == "*":
+            expression.append("[^/]*")
+            index += 1
+        elif pattern[index] == "?":
+            expression.append("[^/]")
+            index += 1
+        else:
+            expression.append(re.escape(pattern[index]))
+            index += 1
+    return re.fullmatch("".join(expression), path) is not None
 
 
 def _iter_markdown_files(manifest: VaultManifest) -> tuple[Path, ...]:
@@ -52,7 +74,7 @@ def _selector_matches(
 ) -> bool:
     checks = []
     if "path" in selector:
-        checks.append(fnmatch.fnmatch(path, selector["path"]))
+        checks.append(_path_matches(path, selector["path"]))
     if "type" in selector:
         checks.append(properties.get("type") == selector["type"])
     if "tag" in selector:
@@ -160,16 +182,29 @@ def _validate_fields(node: Node, manifest: VaultManifest) -> list[ValidationIssu
     return issues
 
 
-def _clean_target(raw: str) -> tuple[str, str] | None:
+def _clean_target(
+    raw: str,
+    *,
+    syntax_hint: str | None = None,
+) -> tuple[str, str] | None:
     value = raw.strip()
     wikilink = WIKILINK_VALUE_RE.match(value)
-    if wikilink:
-        value = wikilink.group(1).split("|", 1)[0]
+    if syntax_hint == "wikilink" or wikilink:
+        if wikilink:
+            value = wikilink.group(1)
+        value = re.split(r"\\?\|", value, maxsplit=1)[0].rstrip("\\")
         provenance = "wikilink"
     else:
         markdown_link = MARKDOWN_LINK_VALUE_RE.match(value)
-        if markdown_link:
-            value = markdown_link.group(1)
+        if syntax_hint == "markdown-link" or markdown_link:
+            if markdown_link:
+                value = markdown_link.group(1)
+            if value.startswith("<") and ">" in value:
+                value = value[1 : value.index(">")]
+            else:
+                titled_target = re.match(r"""^(\S+)(?:\s+["'(].*)?$""", value)
+                if titled_target:
+                    value = titled_target.group(1)
             provenance = "markdown-link"
         else:
             provenance = "frontmatter"
@@ -178,12 +213,17 @@ def _clean_target(raw: str) -> tuple[str, str] | None:
     parsed = urlsplit(value)
     if parsed.scheme or parsed.netloc:
         return None
+    if provenance == "markdown-link" and parsed.path.startswith("/"):
+        return None
 
     target = unquote(parsed.path).strip()
     if not target or target.startswith("#"):
         return None
     if "#" in target:
         target = target.split("#", 1)[0]
+    suffix = PurePosixPath(target).suffix.lower()
+    if provenance == "markdown-link" and suffix not in {"", ".md"}:
+        return None
     if target.endswith(".md"):
         target = target[:-3]
     target = target.lstrip("/")
@@ -199,8 +239,9 @@ def _resolve_target(
     source_id: str,
     node_ids: set[str],
     basename_index: dict[str, set[str]],
+    syntax_hint: str | None = None,
 ) -> tuple[str, str] | None:
-    cleaned = _clean_target(raw)
+    cleaned = _clean_target(raw, syntax_hint=syntax_hint)
     if cleaned is None:
         return None
     target, provenance = cleaned
@@ -213,6 +254,10 @@ def _resolve_target(
         normalized = PurePosixPath(posixpath.normpath(candidate)).as_posix()
         if normalized in node_ids:
             return normalized, provenance
+
+    suffix = PurePosixPath(target).suffix.lower()
+    if provenance == "wikilink" and suffix not in {"", ".md"}:
+        return None
 
     basename_matches = basename_index.get(PurePosixPath(target).name, set())
     if len(basename_matches) == 1:
@@ -448,6 +493,7 @@ def scan_vault(root: Path) -> ScanResult:
                 source_id=item.node.id,
                 node_ids=node_ids,
                 basename_index=basename_index,
+                syntax_hint=syntax,
             )
             if resolved is None:
                 continue

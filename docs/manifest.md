@@ -33,7 +33,8 @@ Every vault has one `.vaultctl/manifest.json`.
 A node kind may have several selectors. Any selector may match; all conditions
 inside one selector must match.
 
-- `path`: vault-relative glob
+- `path`: vault-relative glob (`*` and `?` stay within one path segment;
+  `**` may cross directories)
 - `type`: exact value of the frontmatter `type` field
 - `tag`: required normalized tag
 - `hasField`: required frontmatter field

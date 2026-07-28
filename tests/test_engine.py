@@ -53,6 +53,31 @@ def test_ambiguous_kind_is_an_error(make_vault) -> None:
     assert [issue.code for issue in result.errors] == ["node.ambiguous-kind"]
 
 
+def test_single_star_does_not_cross_directory_boundaries(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "defaultKind": "document",
+            "nodeKinds": {
+                "document": {"selectors": [{"path": "*.md"}]},
+                "nested": {"selectors": [{"path": "notes/**"}]},
+            },
+            "relations": {},
+        },
+        notes={
+            "root.md": "# Root\n",
+            "notes/example.md": "# Nested\n",
+        },
+    )
+
+    result = scan_vault(root)
+
+    assert result.errors == ()
+    assert [(node.id, node.kind) for node in result.nodes] == [
+        ("notes/example", "nested"),
+        ("root", "document"),
+    ]
+
+
 def test_many_relation_requires_a_list(make_vault) -> None:
     root = make_vault(
         notes={
@@ -95,6 +120,82 @@ def test_unresolved_body_link_is_a_warning(make_vault) -> None:
 
     assert result.errors == ()
     assert [issue.code for issue in result.warnings] == ["link.unresolved"]
+
+
+def test_body_wikilink_aliases_resolve(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\n"
+                "See [[notes/target|Target]] and "
+                "[[notes/target\\|Escaped target]].\n"
+            ),
+            "notes/target.md": "---\ntags: []\nrelated: []\n---\n# Target\n",
+        }
+    )
+
+    result = scan_vault(root)
+
+    assert result.issues == ()
+    assert [
+        (edge.relation, edge.target, edge.provenance)
+        for edge in result.nodes[0].outgoing_edges
+    ] == [
+        ("link", "notes/target", "wikilink"),
+        ("link", "notes/target", "wikilink"),
+    ]
+
+
+def test_markdown_artifact_links_are_not_note_edges(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\n"
+                "Download [data](../assets/data.json).\n"
+            )
+        }
+    )
+
+    result = scan_vault(root)
+
+    assert result.issues == ()
+    assert result.edges == ()
+
+
+def test_absolute_markdown_paths_are_not_note_edges(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\n"
+                "Open [local source](/workspace/project/source.py).\n"
+            )
+        }
+    )
+
+    result = scan_vault(root)
+
+    assert result.issues == ()
+    assert result.edges == ()
+
+
+def test_wikilink_artifacts_are_not_note_edges(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\n"
+                "Open [[views/planning.canvas]].\n"
+            )
+        }
+    )
+
+    result = scan_vault(root)
+
+    assert result.issues == ()
+    assert result.edges == ()
 
 
 def test_symlink_escape_is_rejected(make_vault, tmp_path: Path) -> None:
