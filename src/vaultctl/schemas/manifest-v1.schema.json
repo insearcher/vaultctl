@@ -42,6 +42,16 @@
       },
       "uniqueItems": true
     },
+    "frontmatter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowLegacyColonScalars": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
     "nodeKinds": {
       "type": "object",
       "minProperties": 1,

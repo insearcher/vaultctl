@@ -35,6 +35,29 @@ def test_example_vault_scans() -> None:
     }
 
 
+def test_manifest_can_enable_legacy_colon_scalar_compatibility(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "frontmatter": {"allowLegacyColonScalars": True},
+        },
+        notes={
+            "notes/example.md": (
+                "---\n"
+                "description: Use when route: fallback\n"
+                "tags: []\n"
+                "related: []\n"
+                "---\n"
+                "# Example\n"
+            )
+        },
+    )
+
+    result = scan_vault(root)
+
+    assert result.errors == ()
+    assert result.nodes[0].properties["description"] == "Use when route: fallback"
+
+
 def test_ambiguous_kind_is_an_error(make_vault) -> None:
     root = make_vault(
         manifest_overrides={

@@ -59,6 +59,7 @@ class VaultManifest:
     default_kind: str | None = None
     ignore: tuple[str, ...] = ()
     capabilities: tuple[str, ...] = ()
+    allow_legacy_colon_scalars: bool = False
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
 

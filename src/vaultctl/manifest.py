@@ -80,5 +80,8 @@ def load_manifest(root: Path) -> VaultManifest:
         default_kind=default_kind,
         ignore=tuple(data.get("ignore", ())),
         capabilities=tuple(data.get("capabilities", ())),
+        allow_legacy_colon_scalars=data.get("frontmatter", {}).get(
+            "allowLegacyColonScalars", False
+        ),
         raw=data,
     )

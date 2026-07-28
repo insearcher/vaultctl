@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -21,6 +22,10 @@ FENCED_CODE_RE = re.compile(
 )
 INLINE_CODE_RE = re.compile(r"`+[^`\n]*`+")
 HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+TOP_LEVEL_SCALAR_RE = re.compile(
+    r"^(?P<key>[A-Za-z_][A-Za-z0-9_-]*):(?P<spacing>[ \t]*)(?P<value>.*)$"
+)
+YAML_STRUCTURED_VALUE_PREFIXES = frozenset("\"'[{>|!&*")
 
 
 @dataclass(frozen=True)
@@ -43,7 +48,39 @@ def _to_plain(value: Any) -> Any:
     return str(value)
 
 
-def parse_markdown(path: Path, *, display_path: str) -> ParsedMarkdown:
+def _quote_legacy_colon_scalars(frontmatter: str) -> str:
+    normalized = []
+    for line in frontmatter.splitlines(keepends=True):
+        content = line.rstrip("\r\n")
+        ending = line[len(content) :]
+        match = TOP_LEVEL_SCALAR_RE.fullmatch(content)
+        if match is None:
+            normalized.append(line)
+            continue
+
+        value = match.group("value")
+        stripped = value.lstrip()
+        if (
+            ": " not in value
+            or not stripped
+            or stripped[0] in YAML_STRUCTURED_VALUE_PREFIXES
+        ):
+            normalized.append(line)
+            continue
+
+        normalized.append(
+            f"{match.group('key')}:{match.group('spacing')}"
+            f"{json.dumps(value, ensure_ascii=False)}{ending}"
+        )
+    return "".join(normalized)
+
+
+def parse_markdown(
+    path: Path,
+    *,
+    display_path: str,
+    allow_legacy_colon_scalars: bool = False,
+) -> ParsedMarkdown:
     try:
         raw = path.read_bytes()
         text = raw.decode("utf-8")
@@ -74,10 +111,23 @@ def parse_markdown(path: Path, *, display_path: str) -> ParsedMarkdown:
         frontmatter = "".join(lines[1:closing_index])
         try:
             loaded = yaml.load(frontmatter) or {}
-        except Exception as exc:
-            raise MarkdownError(
-                f"{display_path} has invalid YAML frontmatter: {exc}"
-            ) from exc
+        except Exception as strict_exc:
+            if not allow_legacy_colon_scalars:
+                raise MarkdownError(
+                    f"{display_path} has invalid YAML frontmatter: {strict_exc}"
+                ) from strict_exc
+
+            normalized = _quote_legacy_colon_scalars(frontmatter)
+            if normalized == frontmatter:
+                raise MarkdownError(
+                    f"{display_path} has invalid YAML frontmatter: {strict_exc}"
+                ) from strict_exc
+            try:
+                loaded = yaml.load(normalized) or {}
+            except Exception as fallback_exc:
+                raise MarkdownError(
+                    f"{display_path} has invalid YAML frontmatter: {fallback_exc}"
+                ) from fallback_exc
         if not isinstance(loaded, Mapping):
             raise MarkdownError(f"{display_path} frontmatter must be a mapping")
         properties = _to_plain(loaded)

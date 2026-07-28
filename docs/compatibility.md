@@ -26,3 +26,7 @@ Migration from an existing tool should remain read-only until:
 Real vault data and snapshots must stay outside this repository. This project
 contains only synthetic fixtures; each consumer owns its private compatibility
 runner and expected results.
+
+Strict YAML remains the default frontmatter contract. Existing line-oriented
+vaults may enable `frontmatter.allowLegacyColonScalars` while migrating; the
+fallback is limited to unquoted top-level scalar values containing `: `.
