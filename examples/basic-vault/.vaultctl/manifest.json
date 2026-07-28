@@ -1,0 +1,33 @@
+{
+  "$schema": "https://raw.githubusercontent.com/insearcher/vaultctl/main/src/vaultctl/schemas/manifest-v1.schema.json",
+  "apiVersion": "vaultctl/v1",
+  "vaultId": "example-vault",
+  "defaultKind": "document",
+  "ignore": [
+    ".git/**",
+    ".vaultctl/**"
+  ],
+  "nodeKinds": {
+    "document": {
+      "selectors": [
+        {
+          "path": "notes/**"
+        }
+      ],
+      "fields": {
+        "tags": {
+          "type": "list"
+        }
+      }
+    }
+  },
+  "relations": {
+    "related": {
+      "field": "related",
+      "cardinality": "0..*",
+      "targetKinds": [
+        "document"
+      ]
+    }
+  }
+}

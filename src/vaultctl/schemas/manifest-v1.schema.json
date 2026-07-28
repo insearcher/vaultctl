@@ -1,0 +1,170 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/insearcher/vaultctl/main/src/vaultctl/schemas/manifest-v1.schema.json",
+  "title": "vaultctl manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "apiVersion",
+    "vaultId",
+    "nodeKinds"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "apiVersion": {
+      "const": "vaultctl/v1"
+    },
+    "vaultId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{2,63}$"
+    },
+    "defaultKind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ignore": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]*$"
+      },
+      "uniqueItems": true
+    },
+    "nodeKinds": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/nodeKind"
+      }
+    },
+    "relations": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": {
+        "$ref": "#/$defs/relation"
+      }
+    }
+  },
+  "$defs": {
+    "selector": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hasField": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "string",
+            "integer",
+            "number",
+            "boolean",
+            "object",
+            "list"
+          ]
+        },
+        "required": {
+          "type": "boolean",
+          "default": false
+        },
+        "enum": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      }
+    },
+    "nodeKind": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selectors"
+      ],
+      "properties": {
+        "selectors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/selector"
+          }
+        },
+        "fields": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": {
+            "$ref": "#/$defs/field"
+          }
+        }
+      }
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field",
+        "cardinality",
+        "targetKinds"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cardinality": {
+          "enum": [
+            "0..1",
+            "0..*"
+          ]
+        },
+        "targetKinds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "acyclic": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    }
+  }
+}
