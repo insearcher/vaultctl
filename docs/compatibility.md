@@ -14,6 +14,7 @@ Current schemas:
 | `context` | `vaultctl.context/v1` |
 | node mutation request input | `vaultctl.node-mutation-request/v1` |
 | `node plan` | `vaultctl.node-mutation-plan/v1` |
+| `node apply` | `vaultctl.node-mutation-receipt/v1` |
 | `merge plan` | `vaultctl.merge-plan/v1` |
 | `merge validate` | `vaultctl.merge-validation/v1` |
 | internal mutation receipt | `vaultctl.receipt/v1` |
@@ -69,7 +70,11 @@ errors; an `invalid` plan retains the candidate and typed issues for the
 caller's correction loop. Rendering or diffing either state repeats the live
 precondition and prospective-state checks. Neither operation writes a file.
 
-`vaultctl.receipt/v1` is emitted only by the internal synthetic transaction
-boundary. It binds the plan and validation digests, exact revisions, manifest,
-engine, before/final hashes, and applied/failed/rolled-back state. There is no
-public apply command.
+`vaultctl.node-mutation-receipt/v1` is emitted by explicit `node apply`. It
+binds the exact plan and prospective-validation digests, manifest, engine,
+candidate source hash, and before/final file states. Its state is `applied`,
+`failed`, or `rolled-back`.
+
+`vaultctl.receipt/v1` remains specific to the internal synthetic
+semantic-merge transaction boundary. It additionally binds exact merge input
+revisions. There is no public semantic-merge apply command.

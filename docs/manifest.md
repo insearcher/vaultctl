@@ -235,3 +235,9 @@ The internal synthetic transaction boundary additionally checks for the
 capability ID `semantic-merge-apply`. This is a technical fail-closed gate,
 not user authorization and not a public write interface. Consumer manifests
 should not enable it before a separately reviewed real-vault pilot.
+
+The public one-path typed mutation command checks for
+`node-mutation-apply`. It is also a technical fail-closed gate, not approval
+or workflow policy. Without it, `node plan`, `node render`, and `node diff`
+remain available while `node apply` fails before writing. Consumer manifests
+should enable it only through a separately reviewed rollout.

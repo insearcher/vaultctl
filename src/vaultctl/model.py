@@ -371,6 +371,58 @@ class MutationPlan:
 
 
 @dataclass(frozen=True)
+class MutationFileState:
+    exists: bool
+    source_hash: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {"exists": self.exists}
+        if self.source_hash is not None:
+            data["sourceHash"] = self.source_hash
+        return data
+
+
+@dataclass(frozen=True)
+class NodeMutationReceipt:
+    schema_version: str
+    operation_id: str
+    plan_id: str
+    plan_digest: str
+    vault_id: str
+    operation: str
+    path: str
+    state: str
+    before: MutationFileState
+    after: MutationFileState
+    candidate_source_hash: str
+    manifest_digest: str
+    engine_version: str
+    validation_digest: str
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data = {
+            "schemaVersion": self.schema_version,
+            "operationId": self.operation_id,
+            "planId": self.plan_id,
+            "planDigest": self.plan_digest,
+            "vaultId": self.vault_id,
+            "operation": self.operation,
+            "path": self.path,
+            "state": self.state,
+            "before": self.before.to_dict(),
+            "after": self.after.to_dict(),
+            "candidateSourceHash": self.candidate_source_hash,
+            "manifestDigest": self.manifest_digest,
+            "engineVersion": self.engine_version,
+            "validationDigest": self.validation_digest,
+        }
+        if self.error is not None:
+            data["error"] = self.error
+        return data
+
+
+@dataclass(frozen=True)
 class Receipt:
     """Versioned evidence from the internal transaction boundary."""
 

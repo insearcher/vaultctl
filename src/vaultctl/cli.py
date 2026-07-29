@@ -15,6 +15,7 @@ from vaultctl.manifest import load_manifest, resolve_vault_root
 from vaultctl.merge import load_merge_plan, plan_merge_files
 from vaultctl.model import ContextResult, ScanResult, SearchHit
 from vaultctl.mutation import (
+    apply_node_mutation_plan,
     diff_node_mutation_plan,
     load_node_mutation_plan,
     load_node_mutation_request,
@@ -100,6 +101,11 @@ def _parser() -> argparse.ArgumentParser:
         help="Render a current plan's unified diff without writing.",
     )
     node_diff.add_argument("--plan", type=Path, required=True)
+    node_apply = node_commands.add_parser(
+        "apply",
+        help="Explicitly apply one ready create or update plan.",
+    )
+    node_apply.add_argument("--plan", type=Path, required=True)
     return parser
 
 
@@ -295,6 +301,11 @@ def _render_text(payload: dict[str, Any]) -> str:
             f"{payload['path']} ({summary['errors']} error(s), "
             f"{summary['warnings']} warning(s))"
         )
+    if schema == "vaultctl.node-mutation-receipt/v1":
+        return (
+            f"node {payload['operation']} {payload['state']}: "
+            f"{payload['path']} ({payload['operationId']})"
+        )
     return (
         f"scan: {len(payload['nodes'])} node(s), "
         f"{len(payload['edges'])} edge(s), "
@@ -346,9 +357,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             plan = load_node_mutation_plan(args.plan)
             if args.node_command == "render":
                 sys.stdout.buffer.write(render_node_mutation_plan(manifest, plan))
-            else:
+                return 0
+            if args.node_command == "diff":
                 sys.stdout.write(diff_node_mutation_plan(manifest, plan))
-            return 0
+                return 0
+            receipt = apply_node_mutation_plan(manifest, plan)
+            _emit(receipt.to_dict(), args.format)
+            return 0 if receipt.state == "applied" else 1
 
         result = scan_vault(root)
         if args.command == "scan":

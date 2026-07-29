@@ -8,7 +8,7 @@ not the owner of Git, editing, approvals, or retry orchestration.
 ```text
 Agent or human
   ├── Git CLI / forge tools: inspect, branch, diff, stage, commit, push
-  ├── vaultctl: scan, plan, validate, and future explicit mutations
+  ├── vaultctl: scan, plan, validate, and explicit one-path node apply
   └── editor or application CLI: inspect and edit Markdown
 ```
 
@@ -24,14 +24,16 @@ For one Markdown node, the caller:
    request;
 2. runs `vaultctl node plan --request request.json`;
 3. inspects the typed validation issues and `node diff`;
-4. uses `node render` as exact candidate input to an explicit editor,
-   application, or future separately approved apply command;
+4. either uses `node render` as exact candidate input to an explicit editor or
+   application, or explicitly runs `node apply` when the consumer has enabled
+   that reviewed capability;
 5. validates and manages Git with ordinary tools.
 
 Update requests require the current raw source hash. Render and diff repeat
 the absence/hash, manifest, engine, candidate, and prospective-vault checks.
 An invalid plan remains inspectable so the agent can revise its request, but
-it is not authorization to write.
+it cannot be applied. A ready plan and manifest capability are still not
+authorization; the agent skill, prompt, or human owns that decision.
 
 ## Conflict-resolution loop
 
