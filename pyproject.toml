@@ -25,6 +25,10 @@ dependencies = [
   "ruamel.yaml>=0.18,<0.20",
 ]
 
+[project.urls]
+Repository = "https://github.com/insearcher/vaultctl"
+Issues = "https://github.com/insearcher/vaultctl/issues"
+
 [project.optional-dependencies]
 dev = [
   "build>=1.2,<2",

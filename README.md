@@ -8,6 +8,22 @@ kinds, fields, tags, and typed relations.
 > export a graph, search, and assemble bounded context. It does not modify
 > vault contents.
 
+## Install
+
+Install the current development version directly from GitHub:
+
+```bash
+uv tool install git+https://github.com/insearcher/vaultctl.git
+vaultctl --version
+```
+
+Automated consumers should pin a full commit SHA:
+
+```bash
+uv tool install \
+  'vaultctl @ git+https://github.com/insearcher/vaultctl.git@<full-commit-sha>'
+```
+
 ## Why
 
 Markdown vaults are easy to edit and review, but every automation tends to
