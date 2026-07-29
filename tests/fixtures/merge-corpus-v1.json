@@ -1,0 +1,493 @@
+{
+  "schemaVersion": "vaultctl.merge-corpus/v1",
+  "defaultBody": "# Example\n",
+  "cases": [
+    {
+      "id": "scalar-unchanged",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {"status": "draft"},
+      "theirs": {"status": "draft"},
+      "expectedState": "clean",
+      "expectedProperties": {"status": "draft"}
+    },
+    {
+      "id": "scalar-same-change",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {"status": "ready"},
+      "theirs": {"status": "ready"},
+      "expectedState": "clean",
+      "expectedProperties": {"status": "ready"}
+    },
+    {
+      "id": "scalar-ours-change",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {"status": "ready"},
+      "theirs": {"status": "draft"},
+      "expectedState": "clean",
+      "expectedProperties": {"status": "ready"}
+    },
+    {
+      "id": "scalar-theirs-change",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {"status": "draft"},
+      "theirs": {"status": "ready"},
+      "expectedState": "clean",
+      "expectedProperties": {"status": "ready"}
+    },
+    {
+      "id": "scalar-concurrent-conflict",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {"status": "ready"},
+      "theirs": {"status": "blocked"},
+      "expectedState": "conflict",
+      "conflictLocations": ["frontmatter.status"]
+    },
+    {
+      "id": "scalar-ours-add",
+      "fields": {"status": "scalar"},
+      "base": {},
+      "ours": {"status": "ready"},
+      "theirs": {},
+      "expectedState": "clean",
+      "expectedProperties": {"status": "ready"}
+    },
+    {
+      "id": "scalar-theirs-add",
+      "fields": {"status": "scalar"},
+      "base": {},
+      "ours": {},
+      "theirs": {"status": "ready"},
+      "expectedState": "clean",
+      "expectedProperties": {"status": "ready"}
+    },
+    {
+      "id": "scalar-same-add",
+      "fields": {"status": "scalar"},
+      "base": {},
+      "ours": {"status": "ready"},
+      "theirs": {"status": "ready"},
+      "expectedState": "clean",
+      "expectedProperties": {"status": "ready"}
+    },
+    {
+      "id": "scalar-different-add-conflict",
+      "fields": {"status": "scalar"},
+      "base": {},
+      "ours": {"status": "ready"},
+      "theirs": {"status": "blocked"},
+      "expectedState": "conflict",
+      "conflictLocations": ["frontmatter.status"]
+    },
+    {
+      "id": "scalar-ours-delete",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {},
+      "theirs": {"status": "draft"},
+      "expectedState": "clean",
+      "expectedProperties": {}
+    },
+    {
+      "id": "scalar-theirs-delete",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {"status": "draft"},
+      "theirs": {},
+      "expectedState": "clean",
+      "expectedProperties": {}
+    },
+    {
+      "id": "scalar-both-delete",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {},
+      "theirs": {},
+      "expectedState": "clean",
+      "expectedProperties": {}
+    },
+    {
+      "id": "scalar-delete-versus-change",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {},
+      "theirs": {"status": "ready"},
+      "expectedState": "conflict",
+      "conflictLocations": ["frontmatter.status"]
+    },
+    {
+      "id": "scalar-null-base",
+      "fields": {"status": "scalar"},
+      "base": {"status": null},
+      "ours": {"status": "ready"},
+      "theirs": {"status": null},
+      "expectedState": "clean",
+      "expectedProperties": {"status": "ready"}
+    },
+    {
+      "id": "scalar-boolean",
+      "fields": {"enabled": "scalar"},
+      "base": {"enabled": false},
+      "ours": {"enabled": true},
+      "theirs": {"enabled": false},
+      "expectedState": "clean",
+      "expectedProperties": {"enabled": true}
+    },
+    {
+      "id": "scalar-number",
+      "fields": {"count": "scalar"},
+      "base": {"count": 1},
+      "ours": {"count": 1},
+      "theirs": {"count": 2},
+      "expectedState": "clean",
+      "expectedProperties": {"count": 2}
+    },
+    {
+      "id": "scalar-object-one-side",
+      "fields": {"settings": "scalar"},
+      "base": {"settings": {"mode": "alpha"}},
+      "ours": {"settings": {"mode": "beta"}},
+      "theirs": {"settings": {"mode": "alpha"}},
+      "expectedState": "clean",
+      "expectedProperties": {"settings": {"mode": "beta"}}
+    },
+    {
+      "id": "scalar-object-conflict",
+      "fields": {"settings": "scalar"},
+      "base": {"settings": {"mode": "alpha"}},
+      "ours": {"settings": {"mode": "beta"}},
+      "theirs": {"settings": {"mode": "gamma"}},
+      "expectedState": "conflict",
+      "conflictLocations": ["frontmatter.settings"]
+    },
+    {
+      "id": "scalar-list-conflict",
+      "fields": {"labels": "scalar"},
+      "base": {"labels": ["alpha"]},
+      "ours": {"labels": ["alpha", "beta"]},
+      "theirs": {"labels": ["alpha", "gamma"]},
+      "expectedState": "conflict",
+      "conflictLocations": ["frontmatter.labels"]
+    },
+    {
+      "id": "body-ours-change",
+      "base": {},
+      "ours": {},
+      "theirs": {},
+      "baseBody": "# Example\n",
+      "oursBody": "# Example\n\nOurs.\n",
+      "theirsBody": "# Example\n",
+      "expectedState": "clean",
+      "expectedProperties": {},
+      "expectedBody": "# Example\n\nOurs.\n"
+    },
+    {
+      "id": "body-theirs-change",
+      "base": {},
+      "ours": {},
+      "theirs": {},
+      "baseBody": "# Example\n",
+      "oursBody": "# Example\n",
+      "theirsBody": "# Example\n\nTheirs.\n",
+      "expectedState": "clean",
+      "expectedProperties": {},
+      "expectedBody": "# Example\n\nTheirs.\n"
+    },
+    {
+      "id": "body-same-change",
+      "base": {},
+      "ours": {},
+      "theirs": {},
+      "baseBody": "# Example\n",
+      "oursBody": "# Updated\n",
+      "theirsBody": "# Updated\n",
+      "expectedState": "clean",
+      "expectedProperties": {},
+      "expectedBody": "# Updated\n"
+    },
+    {
+      "id": "body-concurrent-conflict",
+      "base": {},
+      "ours": {},
+      "theirs": {},
+      "baseBody": "# Example\n",
+      "oursBody": "# Ours\n",
+      "theirsBody": "# Theirs\n",
+      "expectedState": "conflict",
+      "conflictLocations": ["body"]
+    },
+    {
+      "id": "body-ours-delete",
+      "base": {},
+      "ours": {},
+      "theirs": {},
+      "baseBody": "# Example\n",
+      "oursBody": "",
+      "theirsBody": "# Example\n",
+      "expectedState": "clean",
+      "expectedProperties": {},
+      "expectedBody": ""
+    },
+    {
+      "id": "body-both-delete",
+      "base": {},
+      "ours": {},
+      "theirs": {},
+      "baseBody": "# Example\n",
+      "oursBody": "",
+      "theirsBody": "",
+      "expectedState": "clean",
+      "expectedProperties": {},
+      "expectedBody": ""
+    },
+    {
+      "id": "set-ours-add",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["shared"]},
+      "ours": {"tags": ["shared", "alpha", "alpha"]},
+      "theirs": {"tags": ["shared"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["shared", "alpha"]}
+    },
+    {
+      "id": "set-theirs-add",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["shared"]},
+      "ours": {"tags": ["shared"]},
+      "theirs": {"tags": ["shared", "beta"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["shared", "beta"]}
+    },
+    {
+      "id": "set-independent-additions",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["shared"]},
+      "ours": {"tags": ["shared", "alpha"]},
+      "theirs": {"tags": ["shared", "beta"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["shared", "alpha", "beta"]},
+      "symmetric": true
+    },
+    {
+      "id": "set-same-addition",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["shared"]},
+      "ours": {"tags": ["shared", "alpha", "alpha"]},
+      "theirs": {"tags": ["shared", "alpha", "alpha"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["shared", "alpha"]}
+    },
+    {
+      "id": "set-ours-remove",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["alpha", "beta"]},
+      "ours": {"tags": ["alpha"]},
+      "theirs": {"tags": ["alpha", "beta"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["alpha"]}
+    },
+    {
+      "id": "set-theirs-remove",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["alpha", "beta"]},
+      "ours": {"tags": ["alpha", "beta"]},
+      "theirs": {"tags": ["beta"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["beta"]}
+    },
+    {
+      "id": "set-independent-removals",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["alpha", "beta", "gamma"]},
+      "ours": {"tags": ["alpha", "gamma"]},
+      "theirs": {"tags": ["alpha", "beta"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["alpha"]},
+      "symmetric": true
+    },
+    {
+      "id": "set-add-and-remove",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["alpha", "beta"]},
+      "ours": {"tags": ["alpha", "gamma"]},
+      "theirs": {"tags": ["alpha", "beta", "delta"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["alpha", "delta", "gamma"]},
+      "symmetric": true
+    },
+    {
+      "id": "set-concurrent-create",
+      "fields": {"tags": "set"},
+      "base": {},
+      "ours": {"tags": ["alpha"]},
+      "theirs": {"tags": ["beta"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["alpha", "beta"]},
+      "symmetric": true
+    },
+    {
+      "id": "set-concurrent-empty-create",
+      "fields": {"tags": "set"},
+      "base": {},
+      "ours": {"tags": []},
+      "theirs": {"tags": []},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": []}
+    },
+    {
+      "id": "set-deduplicates-values",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["alpha", "alpha"]},
+      "ours": {"tags": ["alpha", "beta", "beta"]},
+      "theirs": {"tags": ["alpha", "gamma"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["alpha", "beta", "gamma"]},
+      "symmetric": true
+    },
+    {
+      "id": "set-ours-type-conflict",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["shared"]},
+      "ours": {"tags": "alpha"},
+      "theirs": {"tags": ["shared", "beta"]},
+      "expectedState": "conflict",
+      "conflictLocations": ["frontmatter.tags"]
+    },
+    {
+      "id": "set-theirs-type-conflict",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["shared"]},
+      "ours": {"tags": ["shared", "alpha"]},
+      "theirs": {"tags": {"name": "beta"}},
+      "expectedState": "conflict",
+      "conflictLocations": ["frontmatter.tags"]
+    },
+    {
+      "id": "set-delete-versus-add",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["alpha"]},
+      "ours": {},
+      "theirs": {"tags": ["alpha", "beta"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["beta"]},
+      "symmetric": true
+    },
+    {
+      "id": "set-object-values",
+      "fields": {"links": "set"},
+      "base": {"links": [{"id": 1}]},
+      "ours": {"links": [{"id": 1}, {"id": 2}]},
+      "theirs": {"links": [{"id": 1}, {"id": 3}]},
+      "expectedState": "clean",
+      "expectedProperties": {"links": [{"id": 1}, {"id": 2}, {"id": 3}]},
+      "symmetric": true
+    },
+    {
+      "id": "combined-scalar-and-body",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {"status": "ready"},
+      "theirs": {"status": "draft"},
+      "baseBody": "# Example\n",
+      "oursBody": "# Example\n",
+      "theirsBody": "# Example\n\nDetails.\n",
+      "expectedState": "clean",
+      "expectedProperties": {"status": "ready"},
+      "expectedBody": "# Example\n\nDetails.\n"
+    },
+    {
+      "id": "combined-set-and-body-same",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["shared"]},
+      "ours": {"tags": ["shared", "alpha"]},
+      "theirs": {"tags": ["shared", "beta"]},
+      "baseBody": "# Example\n",
+      "oursBody": "# Updated\n",
+      "theirsBody": "# Updated\n",
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["shared", "alpha", "beta"]},
+      "expectedBody": "# Updated\n",
+      "symmetric": true
+    },
+    {
+      "id": "combined-field-conflict-set-clean",
+      "fields": {"status": "scalar", "tags": "set"},
+      "base": {"status": "draft", "tags": ["shared"]},
+      "ours": {"status": "ready", "tags": ["shared", "alpha"]},
+      "theirs": {"status": "blocked", "tags": ["shared", "beta"]},
+      "expectedState": "conflict",
+      "conflictLocations": ["frontmatter.status"]
+    },
+    {
+      "id": "combined-body-conflict-field-clean",
+      "fields": {"status": "scalar"},
+      "base": {"status": "draft"},
+      "ours": {"status": "ready"},
+      "theirs": {"status": "draft"},
+      "baseBody": "# Example\n",
+      "oursBody": "# Ours\n",
+      "theirsBody": "# Theirs\n",
+      "expectedState": "conflict",
+      "conflictLocations": ["body"]
+    },
+    {
+      "id": "combined-independent-fields",
+      "fields": {"priority": "scalar", "status": "scalar"},
+      "base": {"priority": "normal", "status": "draft"},
+      "ours": {"priority": "normal", "status": "ready"},
+      "theirs": {"priority": "high", "status": "draft"},
+      "expectedState": "clean",
+      "expectedProperties": {"priority": "high", "status": "ready"}
+    },
+    {
+      "id": "combined-two-field-conflicts",
+      "fields": {"priority": "scalar", "status": "scalar"},
+      "base": {"priority": "normal", "status": "draft"},
+      "ours": {"priority": "high", "status": "ready"},
+      "theirs": {"priority": "low", "status": "blocked"},
+      "expectedState": "conflict",
+      "conflictLocations": ["frontmatter.priority", "frontmatter.status"]
+    },
+    {
+      "id": "scalar-missing-versus-null",
+      "fields": {"status": "scalar"},
+      "base": {},
+      "ours": {"status": null},
+      "theirs": {},
+      "expectedState": "clean",
+      "expectedProperties": {"status": null}
+    },
+    {
+      "id": "scalar-null-unchanged",
+      "fields": {"status": "scalar"},
+      "base": {"status": null},
+      "ours": {"status": null},
+      "theirs": {"status": null},
+      "expectedState": "clean",
+      "expectedProperties": {"status": null}
+    },
+    {
+      "id": "combined-delete-and-add-fields",
+      "fields": {"left": "scalar", "right": "scalar"},
+      "base": {"left": "alpha"},
+      "ours": {},
+      "theirs": {"left": "alpha", "right": "beta"},
+      "expectedState": "clean",
+      "expectedProperties": {"right": "beta"}
+    },
+    {
+      "id": "set-canonical-addition-order",
+      "fields": {"tags": "set"},
+      "base": {"tags": ["zeta"]},
+      "ours": {"tags": ["zeta", "beta"]},
+      "theirs": {"tags": ["zeta", "alpha"]},
+      "expectedState": "clean",
+      "expectedProperties": {"tags": ["zeta", "alpha", "beta"]},
+      "symmetric": true
+    }
+  ]
+}

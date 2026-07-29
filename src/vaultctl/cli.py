@@ -12,6 +12,7 @@ from vaultctl import __version__
 from vaultctl.engine import scan_vault
 from vaultctl.errors import VaultctlError
 from vaultctl.manifest import load_manifest, resolve_vault_root
+from vaultctl.merge import plan_merge_files
 from vaultctl.model import ContextResult, ScanResult, SearchHit
 from vaultctl.search import context as build_context
 from vaultctl.search import search as search_nodes
@@ -54,6 +55,20 @@ def _parser() -> argparse.ArgumentParser:
     graph = commands.add_parser("graph", help="Graph operations.")
     graph_commands = graph.add_subparsers(dest="graph_command", required=True)
     graph_commands.add_parser("export", help="Export the normalized graph.")
+
+    merge = commands.add_parser("merge", help="Semantic merge operations.")
+    merge_commands = merge.add_subparsers(dest="merge_command", required=True)
+    merge_plan = merge_commands.add_parser(
+        "plan",
+        help="Plan a read-only semantic merge for one Markdown triple.",
+    )
+    merge_plan.add_argument("--path", required=True)
+    merge_plan.add_argument("--base", type=Path, required=True)
+    merge_plan.add_argument("--ours", type=Path, required=True)
+    merge_plan.add_argument("--theirs", type=Path, required=True)
+    merge_plan.add_argument("--base-revision", required=True)
+    merge_plan.add_argument("--ours-revision", required=True)
+    merge_plan.add_argument("--theirs-revision", required=True)
     return parser
 
 
@@ -220,6 +235,21 @@ def _render_text(payload: dict[str, Any]) -> str:
             f"context characters: {budget['usedCharacters']}/{budget['maxCharacters']}"
         )
         return "\n".join(lines)
+    if schema == "vaultctl.merge-plan/v1":
+        if payload["state"] == "clean":
+            return (
+                f"merge plan clean: {payload['path']} "
+                f"({len(payload['decisions'])} decision(s))"
+            )
+        lines = [
+            f"merge plan conflict: {payload['path']} "
+            f"({len(payload['conflicts'])} conflict(s))"
+        ]
+        lines.extend(
+            f"- {conflict['location']}: {conflict['message']}"
+            for conflict in payload["conflicts"]
+        )
+        return "\n".join(lines)
     return (
         f"scan: {len(payload['nodes'])} node(s), "
         f"{len(payload['edges'])} edge(s), "
@@ -242,6 +272,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload = _doctor_payload(root)
             _emit(payload, args.format)
             return 0
+        if args.command == "merge":
+            manifest = load_manifest(root)
+            plan = plan_merge_files(
+                manifest,
+                path=args.path,
+                base_path=args.base,
+                ours_path=args.ours,
+                theirs_path=args.theirs,
+                base_revision=args.base_revision,
+                ours_revision=args.ours_revision,
+                theirs_revision=args.theirs_revision,
+            )
+            _emit(plan.to_dict(), args.format)
+            return 0 if plan.state == "clean" else 1
 
         result = scan_vault(root)
         if args.command == "scan":

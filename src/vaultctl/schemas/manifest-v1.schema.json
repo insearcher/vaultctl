@@ -58,6 +58,9 @@
     "context": {
       "$ref": "#/$defs/context"
     },
+    "merge": {
+      "$ref": "#/$defs/merge"
+    },
     "nodeKinds": {
       "type": "object",
       "minProperties": 1,
@@ -332,6 +335,48 @@
           "minimum": 1,
           "maximum": 100,
           "default": 2
+        }
+      }
+    },
+    "mergeFieldPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "strategy"
+      ],
+      "properties": {
+        "strategy": {
+          "enum": [
+            "manual",
+            "scalar",
+            "set"
+          ]
+        }
+      }
+    },
+    "merge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaultFieldStrategy": {
+          "enum": [
+            "manual",
+            "scalar"
+          ],
+          "default": "manual"
+        },
+        "fields": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/mergeFieldPolicy"
+          }
+        },
+        "bodyStrategy": {
+          "const": "manual",
+          "default": "manual"
         }
       }
     },

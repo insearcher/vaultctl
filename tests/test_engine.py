@@ -336,6 +336,53 @@ def test_context_grouping_requires_a_key_source(make_vault) -> None:
     assert "context.grouping" in message
 
 
+def test_manifest_accepts_declarative_merge_policy(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "merge": {
+                "defaultFieldStrategy": "manual",
+                "fields": {
+                    "tags": {
+                        "strategy": "set",
+                    },
+                    "status": {
+                        "strategy": "scalar",
+                    },
+                },
+                "bodyStrategy": "manual",
+            }
+        }
+    )
+
+    manifest = load_manifest(root)
+
+    assert manifest.raw["merge"]["fields"]["tags"]["strategy"] == "set"
+
+
+def test_manifest_rejects_executable_merge_policy(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "merge": {
+                "fields": {
+                    "tags": {
+                        "strategy": "shell",
+                    }
+                }
+            }
+        }
+    )
+
+    try:
+        load_manifest(root)
+    except Exception as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("manifest unexpectedly accepted executable merge policy")
+
+    assert "merge.fields.tags.strategy" in message
+    assert "shell" in message
+
+
 def test_acyclic_relation_detects_a_cycle(make_vault) -> None:
     root = make_vault(
         manifest_overrides={

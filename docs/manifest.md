@@ -196,3 +196,37 @@ first, followed by the freshest ISO date, score, and path. The response keeps
 both the freshness-selected `representative` and a distinct relevance-selected
 `topMatch` when needed. `outputFields` is an explicit allowlist of frontmatter
 properties to project into context hits; unspecified properties stay internal.
+
+## Semantic merge policy
+
+Merge policy is declarative and optional:
+
+```json
+{
+  "merge": {
+    "defaultFieldStrategy": "manual",
+    "fields": {
+      "status": {"strategy": "scalar"},
+      "tags": {"strategy": "set"},
+      "related": {"strategy": "set"}
+    },
+    "bodyStrategy": "manual"
+  }
+}
+```
+
+Phase 0 supports three field strategies:
+
+- `manual`: ordinary three-way behavior; different concurrent changes conflict.
+- `scalar`: the same conservative behavior, with explicit scalar intent in the
+  plan.
+- `set`: list values are treated as unordered unique JSON values. Independent
+  additions and removals are combined deterministically; a non-list value
+  produces a typed conflict.
+
+All strategies accept an unchanged side or the same change on both sides.
+`defaultFieldStrategy` may be `manual` or `scalar`; set behavior must always be
+opted into per field. `bodyStrategy` is fixed to `manual` in manifest v1.
+
+The manifest cannot name commands, hooks, modules, or merge-driver
+executables. It describes policy only.

@@ -12,6 +12,8 @@ Current schemas:
 | `doctor` | `vaultctl.doctor/v1` |
 | `search` | `vaultctl.search/v1` |
 | `context` | `vaultctl.context/v1` |
+| `merge plan` | `vaultctl.merge-plan/v1` |
+| future mutation receipt | `vaultctl.receipt/v1` |
 
 Consumers must check `schemaVersion` instead of inferring compatibility from
 the CLI version.
@@ -32,3 +34,20 @@ runner and expected results.
 Strict YAML remains the default frontmatter contract. Existing line-oriented
 vaults may enable `frontmatter.allowLegacyColonScalars` while migrating; the
 fallback is limited to unquoted top-level scalar values containing `: `.
+
+## Semantic merge plans
+
+A `vaultctl.merge-plan/v1` payload binds the result to:
+
+- the exact base, ours, and theirs revision IDs and source hashes;
+- one normalized vault-relative Markdown path;
+- the manifest digest and engine version;
+- deterministic decisions, typed conflicts, and a candidate only when the
+  state is `clean`.
+
+Conflict plans always have `candidate: null`. A clean plan is still not
+authorization to write; no current command consumes it.
+
+`vaultctl.receipt/v1` is the reserved apply/rollback evidence contract. Its
+schema exists so future write work cannot invent an unversioned result, but
+the read-only release does not emit receipts.
