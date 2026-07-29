@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/insearcher/vaultctl/main/src/vaultctl/schemas/node-mutation-plan-v1.schema.json",
+  "title": "vaultctl node mutation plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "planId",
+    "vaultId",
+    "operation",
+    "path",
+    "kind",
+    "engineVersion",
+    "manifestDigest",
+    "precondition",
+    "candidate",
+    "diff",
+    "state",
+    "validation"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vaultctl.node-mutation-plan/v1"
+    },
+    "planId": {
+      "$ref": "#/$defs/digest"
+    },
+    "vaultId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operation": {
+      "enum": [
+        "create",
+        "update"
+      ]
+    },
+    "path": {
+      "$ref": "#/$defs/path"
+    },
+    "kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "engineVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "precondition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exists"
+          ],
+          "properties": {
+            "exists": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exists",
+            "sourceHash"
+          ],
+          "properties": {
+            "exists": {
+              "const": true
+            },
+            "sourceHash": {
+              "$ref": "#/$defs/sourceHash"
+            }
+          }
+        }
+      ]
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "sourceHash"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "sourceHash": {
+          "$ref": "#/$defs/sourceHash"
+        }
+      }
+    },
+    "diff": {
+      "type": "string",
+      "minLength": 1
+    },
+    "state": {
+      "enum": [
+        "ready",
+        "invalid"
+      ]
+    },
+    "validation": {
+      "$ref": "#/$defs/validation"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "create"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "precondition": {
+            "properties": {
+              "exists": {
+                "const": false
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "precondition": {
+            "properties": {
+              "exists": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "ready"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "validation": {
+            "properties": {
+              "valid": {
+                "const": true
+              },
+              "summary": {
+                "properties": {
+                  "errors": {
+                    "const": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "validation": {
+            "properties": {
+              "valid": {
+                "const": false
+              },
+              "summary": {
+                "properties": {
+                  "errors": {
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.md$"
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "level": {
+          "enum": [
+            "error",
+            "warning"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodes",
+        "edges",
+        "errors",
+        "warnings"
+      ],
+      "properties": {
+        "nodes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "edges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valid",
+        "vaultDigest",
+        "summary",
+        "issues"
+      ],
+      "properties": {
+        "valid": {
+          "type": "boolean"
+        },
+        "vaultDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/issue"
+          }
+        }
+      }
+    }
+  }
+}

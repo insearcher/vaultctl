@@ -12,6 +12,8 @@ Current schemas:
 | `doctor` | `vaultctl.doctor/v1` |
 | `search` | `vaultctl.search/v1` |
 | `context` | `vaultctl.context/v1` |
+| node mutation request input | `vaultctl.node-mutation-request/v1` |
+| `node plan` | `vaultctl.node-mutation-plan/v1` |
 | `merge plan` | `vaultctl.merge-plan/v1` |
 | `merge validate` | `vaultctl.merge-validation/v1` |
 | internal mutation receipt | `vaultctl.receipt/v1` |
@@ -53,6 +55,19 @@ prospective validation.
 `vaultctl.merge-validation/v1` binds a rendered candidate source hash and
 whole-vault digest to the plan. It is read-only and contains the prospective
 validation issues and summary.
+
+## Node mutation plans
+
+A `vaultctl.node-mutation-request/v1` input describes exactly one create or
+update. Create supplies a complete document. Update supplies the expected
+current source hash and typed property/body changes.
+
+`vaultctl.node-mutation-plan/v1` binds the candidate and unified diff to the
+vault ID, manifest digest, engine version, target precondition, requested kind,
+and whole-vault prospective validation. A `ready` plan has no validation
+errors; an `invalid` plan retains the candidate and typed issues for the
+caller's correction loop. Rendering or diffing either state repeats the live
+precondition and prospective-state checks. Neither operation writes a file.
 
 `vaultctl.receipt/v1` is emitted only by the internal synthetic transaction
 boundary. It binds the plan and validation digests, exact revisions, manifest,

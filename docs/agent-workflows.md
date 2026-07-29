@@ -16,6 +16,23 @@ The agent skill or prompt owns the sequence and domain policy. Consumer
 repositories may provide different instructions while using the same
 `vaultctl` contracts and manifest model.
 
+## Create/update loop
+
+For one Markdown node, the caller:
+
+1. reads the current graph or note and constructs a versioned create/update
+   request;
+2. runs `vaultctl node plan --request request.json`;
+3. inspects the typed validation issues and `node diff`;
+4. uses `node render` as exact candidate input to an explicit editor,
+   application, or future separately approved apply command;
+5. validates and manages Git with ordinary tools.
+
+Update requests require the current raw source hash. Render and diff repeat
+the absence/hash, manifest, engine, candidate, and prospective-vault checks.
+An invalid plan remains inspectable so the agent can revise its request, but
+it is not authorization to write.
+
 ## Conflict-resolution loop
 
 For a Markdown conflict, the caller:
