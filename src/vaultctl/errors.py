@@ -16,3 +16,7 @@ class QueryError(VaultctlError):
 
 class MergeError(VaultctlError):
     """A semantic merge plan cannot be produced safely."""
+
+
+class MutationError(VaultctlError):
+    """A node mutation request or plan cannot be handled safely."""

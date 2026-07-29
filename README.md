@@ -10,8 +10,8 @@ retry decisions; `vaultctl` supplies structured evidence and validation.
 
 > **Status:** pre-alpha. The public CLI is read-only: it can scan, validate,
 > export a graph, search, assemble bounded context, produce semantic merge
-> plans, and validate a candidate against the prospective whole vault. It does
-> not expose a write command.
+> plans, and plan/render typed create or update candidates against the
+> prospective whole vault. It does not expose a write command.
 
 ## Install
 
@@ -74,6 +74,9 @@ modules.
 | `graph export` | Export a compact versioned graph |
 | `search` | Rank notes with manifest-defined zones |
 | `context` | Return ranked notes and snippets within an output budget |
+| `node plan` | Plan and prospectively validate one typed create or update |
+| `node render` | Emit a current plan's exact candidate Markdown |
+| `node diff` | Emit a current plan's unified diff |
 | `merge plan` | Produce a fail-closed semantic plan for one three-way Markdown merge |
 | `merge validate` | Validate a clean plan against the prospective whole vault |
 | `doctor` | Check vault discovery and available execution backends |
@@ -89,6 +92,12 @@ manifest policy, and returns either a candidate or typed conflicts. See
 See [agent workflows](docs/agent-workflows.md) for the intended boundary
 between Git, an agent or human operator, optional editor/application tools,
 and `vaultctl`.
+
+`node plan`, `node render`, and `node diff` are also read-only. The caller
+supplies a versioned JSON request; `vaultctl` binds the result to the selected
+vault, manifest, engine, exact source precondition, candidate, diff, and
+whole-vault prospective validation. See
+[typed node mutation plans](docs/node-mutations.md).
 
 The internal one-path transaction boundary is not a supported CLI surface and
 is tested only on synthetic vaults. See

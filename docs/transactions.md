@@ -2,13 +2,17 @@
 
 The public CLI remains read-only. This milestone adds:
 
+- `vaultctl node plan --request <file>` for a typed one-note create/update
+  candidate and whole-vault prospective validation;
+- `vaultctl node render --plan <file>` and `node diff` for exact, stale-checked
+  read-only evidence;
 - `vaultctl merge validate --plan <file>` for whole-vault prospective
   validation;
 - an internal one-path transaction engine exercised only on synthetic
   fixtures;
 - a versioned receipt for applied, failed, and rolled-back attempts.
 
-There is no public `merge apply` command yet.
+There is no public node or merge apply command yet.
 
 The internal apply function is a safety proof for future explicit,
 agent-callable write primitives. It is not an autonomous writer or Git

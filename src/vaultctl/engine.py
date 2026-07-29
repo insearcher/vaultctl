@@ -376,9 +376,17 @@ def scan_vault(
     root: Path,
     *,
     overlays: Mapping[str, bytes] | None = None,
+    create_overlays: Mapping[str, bytes] | None = None,
 ) -> ScanResult:
     manifest = load_manifest(root)
     prospective = dict(overlays or {})
+    prospective_creates = dict(create_overlays or {})
+    duplicate_overlays = sorted(set(prospective) & set(prospective_creates))
+    if duplicate_overlays:
+        joined = ", ".join(duplicate_overlays)
+        raise MarkdownError(
+            f"prospective paths cannot be both updates and creates: {joined}"
+        )
     pending: list[_PendingNode] = []
     issues: list[ValidationIssue] = []
 
@@ -450,6 +458,82 @@ def scan_vault(
             "prospective overlays must target existing, included Markdown paths: "
             f"{joined}"
         )
+
+    patterns = tuple(dict.fromkeys((*BUILTIN_IGNORES, *manifest.ignore)))
+    for relative in sorted(prospective_creates):
+        candidate = PurePosixPath(relative)
+        if (
+            not relative
+            or candidate.is_absolute()
+            or candidate.suffix.lower() != ".md"
+            or ".." in candidate.parts
+            or "\\" in relative
+            or candidate.as_posix() != relative
+        ):
+            raise MarkdownError(
+                "prospective create paths must be normalized vault-relative "
+                f"Markdown paths: {relative}"
+            )
+        if _is_ignored(relative, patterns):
+            raise MarkdownError(
+                f"prospective create path is excluded by vault ignore rules: {relative}"
+            )
+
+        vault_root = manifest.root.resolve()
+        target = vault_root.joinpath(*candidate.parts)
+        try:
+            resolved = target.resolve(strict=False)
+            resolved.relative_to(vault_root)
+        except (OSError, ValueError) as exc:
+            raise MarkdownError(
+                f"prospective create path resolves outside the vault root: {relative}"
+            ) from exc
+        if target.is_symlink() or resolved != target.absolute():
+            raise MarkdownError(
+                f"prospective create path has a symlinked parent or target: {relative}"
+            )
+        if target.exists():
+            raise MarkdownError(f"prospective create path already exists: {relative}")
+
+        try:
+            parsed = parse_markdown_bytes(
+                prospective_creates[relative],
+                display_path=relative,
+                fallback_stem=candidate.stem,
+                allow_legacy_colon_scalars=manifest.allow_legacy_colon_scalars,
+            )
+        except MarkdownError as exc:
+            issues.append(
+                ValidationIssue(
+                    level="error",
+                    code="markdown.parse",
+                    message=str(exc),
+                    path=relative,
+                )
+            )
+            continue
+
+        tags = normalize_tags(parsed.properties.get("tags"), parsed.body)
+        kind, classification_issues = _classify(
+            manifest,
+            path=relative,
+            properties=parsed.properties,
+            tags=tags,
+        )
+        issues.extend(classification_issues)
+        node = Node(
+            id=relative[:-3],
+            path=relative,
+            kind=kind,
+            title=parsed.title,
+            properties=parsed.properties,
+            tags=tags,
+            source_hash=parsed.source_hash,
+            body=parsed.body,
+            headings=parsed.headings,
+        )
+        issues.extend(_validate_fields(node, manifest))
+        pending.append(_PendingNode(node=node, body=parsed.body))
 
     node_ids = {item.node.id for item in pending}
     basename_index: dict[str, set[str]] = {}

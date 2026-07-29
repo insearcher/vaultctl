@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/insearcher/vaultctl/main/src/vaultctl/schemas/node-mutation-request-v1.schema.json",
+  "title": "vaultctl node mutation request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "operation",
+    "path",
+    "kind"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vaultctl.node-mutation-request/v1"
+    },
+    "operation": {
+      "enum": [
+        "create",
+        "update"
+      ]
+    },
+    "path": {
+      "$ref": "#/$defs/path"
+    },
+    "kind": {
+      "type": "string",
+      "minLength": 1
+    },
+    "document": {
+      "$ref": "#/$defs/document"
+    },
+    "expectedSourceHash": {
+      "$ref": "#/$defs/sourceHash"
+    },
+    "changes": {
+      "$ref": "#/$defs/changes"
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "operation": {
+          "const": "create"
+        }
+      },
+      "required": [
+        "document"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "expectedSourceHash"
+            ]
+          },
+          {
+            "required": [
+              "changes"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "properties": {
+        "operation": {
+          "const": "update"
+        }
+      },
+      "required": [
+        "expectedSourceHash",
+        "changes"
+      ],
+      "not": {
+        "required": [
+          "document"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.md$"
+    },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "properties",
+        "body"
+      ],
+      "properties": {
+        "properties": {
+          "type": "object"
+        },
+        "body": {
+          "type": "string"
+        }
+      }
+    },
+    "changes": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "setProperties": {
+          "type": "object"
+        },
+        "removeProperties": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "body": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

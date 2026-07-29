@@ -283,14 +283,91 @@ class ProspectiveValidation:
 
 
 @dataclass(frozen=True)
+class NodeMutationRequest:
+    schema_version: str
+    operation: str
+    path: str
+    kind: str
+    properties: dict[str, Any]
+    remove_properties: tuple[str, ...]
+    body: str | None
+    expected_source_hash: str | None
+
+
+@dataclass(frozen=True)
+class MutationPrecondition:
+    exists: bool
+    source_hash: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data: dict[str, Any] = {"exists": self.exists}
+        if self.source_hash is not None:
+            data["sourceHash"] = self.source_hash
+        return data
+
+
+@dataclass(frozen=True)
+class MutationCandidate:
+    source: str
+    source_hash: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "source": self.source,
+            "sourceHash": self.source_hash,
+        }
+
+
+@dataclass(frozen=True)
+class MutationValidation:
+    valid: bool
+    vault_digest: str
+    summary: dict[str, int]
+    issues: tuple[ValidationIssue, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "valid": self.valid,
+            "vaultDigest": self.vault_digest,
+            "summary": self.summary,
+            "issues": [issue.to_dict() for issue in self.issues],
+        }
+
+
+@dataclass(frozen=True)
 class MutationPlan:
-    """Versioned future write contract; no apply behavior exists yet."""
+    """Versioned, read-only plan for one create or update."""
 
     schema_version: str
+    plan_id: str
     vault_id: str
     operation: str
-    expected_hashes: dict[str, str]
-    paths: tuple[str, ...]
+    path: str
+    kind: str
+    engine_version: str
+    manifest_digest: str
+    precondition: MutationPrecondition
+    candidate: MutationCandidate
+    diff: str
+    state: str
+    validation: MutationValidation
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schemaVersion": self.schema_version,
+            "planId": self.plan_id,
+            "vaultId": self.vault_id,
+            "operation": self.operation,
+            "path": self.path,
+            "kind": self.kind,
+            "engineVersion": self.engine_version,
+            "manifestDigest": self.manifest_digest,
+            "precondition": self.precondition.to_dict(),
+            "candidate": self.candidate.to_dict(),
+            "diff": self.diff,
+            "state": self.state,
+            "validation": self.validation.to_dict(),
+        }
 
 
 @dataclass(frozen=True)

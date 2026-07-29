@@ -14,6 +14,13 @@ from vaultctl.errors import VaultctlError
 from vaultctl.manifest import load_manifest, resolve_vault_root
 from vaultctl.merge import load_merge_plan, plan_merge_files
 from vaultctl.model import ContextResult, ScanResult, SearchHit
+from vaultctl.mutation import (
+    diff_node_mutation_plan,
+    load_node_mutation_plan,
+    load_node_mutation_request,
+    plan_node_mutation,
+    render_node_mutation_plan,
+)
 from vaultctl.search import context as build_context
 from vaultctl.search import search as search_nodes
 from vaultctl.transaction import validate_merge_plan
@@ -75,6 +82,24 @@ def _parser() -> argparse.ArgumentParser:
         help="Validate a clean merge plan against the prospective whole vault.",
     )
     merge_validate.add_argument("--plan", type=Path, required=True)
+
+    node = commands.add_parser("node", help="Typed node mutation planning.")
+    node_commands = node.add_subparsers(dest="node_command", required=True)
+    node_plan = node_commands.add_parser(
+        "plan",
+        help="Plan and prospectively validate one read-only create or update.",
+    )
+    node_plan.add_argument("--request", type=Path, required=True)
+    node_render = node_commands.add_parser(
+        "render",
+        help="Render exact candidate Markdown from a current plan without writing.",
+    )
+    node_render.add_argument("--plan", type=Path, required=True)
+    node_diff = node_commands.add_parser(
+        "diff",
+        help="Render a current plan's unified diff without writing.",
+    )
+    node_diff.add_argument("--plan", type=Path, required=True)
     return parser
 
 
@@ -263,6 +288,13 @@ def _render_text(payload: dict[str, Any]) -> str:
             f"prospective merge validation {status}: {payload['path']} "
             f"({summary['errors']} error(s), {summary['warnings']} warning(s))"
         )
+    if schema == "vaultctl.node-mutation-plan/v1":
+        summary = payload["validation"]["summary"]
+        return (
+            f"node {payload['operation']} plan {payload['state']}: "
+            f"{payload['path']} ({summary['errors']} error(s), "
+            f"{summary['warnings']} warning(s))"
+        )
     return (
         f"scan: {len(payload['nodes'])} node(s), "
         f"{len(payload['edges'])} edge(s), "
@@ -304,6 +336,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             validation = validate_merge_plan(manifest, plan)
             _emit(validation.to_dict(), args.format)
             return 0 if validation.valid else 1
+        if args.command == "node":
+            manifest = load_manifest(root)
+            if args.node_command == "plan":
+                request = load_node_mutation_request(args.request)
+                plan = plan_node_mutation(manifest, request)
+                _emit(plan.to_dict(), args.format)
+                return 0 if plan.state == "ready" else 1
+            plan = load_node_mutation_plan(args.plan)
+            if args.node_command == "render":
+                sys.stdout.buffer.write(render_node_mutation_plan(manifest, plan))
+            else:
+                sys.stdout.write(diff_node_mutation_plan(manifest, plan))
+            return 0
 
         result = scan_vault(root)
         if args.command == "scan":
