@@ -8,10 +8,9 @@ It is designed as a deterministic toolbox for agents and humans, not as an
 autonomous workflow orchestrator. The caller owns Git, editing, approval, and
 retry decisions; `vaultctl` supplies structured evidence and validation.
 
-> **Status:** pre-alpha. The public CLI is read-only: it can scan, validate,
-> export a graph, search, assemble bounded context, produce semantic merge
-> plans, and plan/render typed create or update candidates against the
-> prospective whole vault. It does not expose a write command.
+> **Status:** pre-alpha. Most commands are read-only. The only public mutation
+> is an explicit, capability-gated `node apply` for one ready typed create or
+> update plan. It does not own Git or any surrounding workflow.
 
 ## Install
 
@@ -77,6 +76,7 @@ modules.
 | `node plan` | Plan and prospectively validate one typed create or update |
 | `node render` | Emit a current plan's exact candidate Markdown |
 | `node diff` | Emit a current plan's unified diff |
+| `node apply` | Explicitly apply one ready plan and emit a versioned receipt |
 | `merge plan` | Produce a fail-closed semantic plan for one three-way Markdown merge |
 | `merge validate` | Validate a clean plan against the prospective whole vault |
 | `doctor` | Check vault discovery and available execution backends |
@@ -93,14 +93,16 @@ See [agent workflows](docs/agent-workflows.md) for the intended boundary
 between Git, an agent or human operator, optional editor/application tools,
 and `vaultctl`.
 
-`node plan`, `node render`, and `node diff` are also read-only. The caller
-supplies a versioned JSON request; `vaultctl` binds the result to the selected
-vault, manifest, engine, exact source precondition, candidate, diff, and
-whole-vault prospective validation. See
+`node plan`, `node render`, and `node diff` are read-only. The caller supplies
+a versioned JSON request; `vaultctl` binds the result to the selected vault,
+manifest, engine, exact source precondition, candidate, diff, and whole-vault
+prospective validation. `node apply` repeats those checks under a cooperative
+lock, performs one local atomic create or update, validates the resulting
+vault, and emits a receipt. See
 [typed node mutation plans](docs/node-mutations.md).
 
-The internal one-path transaction boundary is not a supported CLI surface and
-is tested only on synthetic vaults. See
+The semantic-merge apply boundary remains internal and is tested only on
+synthetic vaults. See
 [prospective validation and transactions](docs/transactions.md).
 
 ## Development

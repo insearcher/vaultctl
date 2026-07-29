@@ -211,7 +211,6 @@ def test_render_rejects_stale_prospective_vault(make_vault) -> None:
     root = make_vault()
     plan = plan_node_mutation(load_manifest(root), _create_request())
     unrelated = root / "notes" / "unrelated.md"
-    unrelated.parent.mkdir()
     unrelated.write_text("# Concurrent\n", encoding="utf-8")
 
     with pytest.raises(MutationError, match="prospective vault state"):
@@ -222,6 +221,7 @@ def test_render_rejects_stale_prospective_vault(make_vault) -> None:
 
 def test_create_rejects_ignored_path(make_vault) -> None:
     root = make_vault(manifest_overrides={"ignore": ["drafts/**"]})
+    (root / "drafts").mkdir()
     with pytest.raises(MarkdownError, match="ignore rules"):
         plan_node_mutation(
             load_manifest(root),
@@ -233,6 +233,7 @@ def test_create_rejects_symlinked_parent(make_vault, tmp_path: Path) -> None:
     root = make_vault()
     outside = tmp_path / "outside"
     outside.mkdir()
+    (root / "notes").rmdir()
     (root / "notes").symlink_to(outside)
     with pytest.raises(MutationError, match="symlinked"):
         plan_node_mutation(load_manifest(root), _create_request())
@@ -248,6 +249,7 @@ def test_candidate_kind_mismatch_is_a_typed_validation_error(make_vault) -> None
             },
         }
     )
+    (root / "tasks").mkdir()
 
     plan = plan_node_mutation(
         load_manifest(root),
@@ -256,6 +258,16 @@ def test_candidate_kind_mismatch_is_a_typed_validation_error(make_vault) -> None
 
     assert plan.state == "invalid"
     assert [issue.code for issue in plan.validation.issues] == ["node.kind-mismatch"]
+
+
+def test_create_requires_existing_parent(make_vault) -> None:
+    root = make_vault()
+
+    with pytest.raises(MutationError, match="parent must be an existing directory"):
+        plan_node_mutation(
+            load_manifest(root),
+            _create_request(path="missing/new.md"),
+        )
 
 
 def test_request_and_plan_loaders_fail_closed_on_ambiguous_or_tampered_data(

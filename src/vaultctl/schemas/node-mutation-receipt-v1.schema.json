@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/insearcher/vaultctl/main/src/vaultctl/schemas/node-mutation-receipt-v1.schema.json",
+  "title": "vaultctl node mutation receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "operationId",
+    "planId",
+    "planDigest",
+    "vaultId",
+    "operation",
+    "path",
+    "state",
+    "before",
+    "after",
+    "candidateSourceHash",
+    "manifestDigest",
+    "engineVersion",
+    "validationDigest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vaultctl.node-mutation-receipt/v1"
+    },
+    "operationId": {
+      "$ref": "#/$defs/digest"
+    },
+    "planId": {
+      "$ref": "#/$defs/digest"
+    },
+    "planDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "vaultId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operation": {
+      "enum": [
+        "create",
+        "update"
+      ]
+    },
+    "path": {
+      "$ref": "#/$defs/path"
+    },
+    "state": {
+      "enum": [
+        "applied",
+        "failed",
+        "rolled-back"
+      ]
+    },
+    "before": {
+      "$ref": "#/$defs/fileState"
+    },
+    "after": {
+      "$ref": "#/$defs/fileState"
+    },
+    "candidateSourceHash": {
+      "$ref": "#/$defs/sourceHash"
+    },
+    "manifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "engineVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "validationDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "error": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "operation": {
+            "const": "create"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "before": {
+            "properties": {
+              "exists": {
+                "const": false
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "before": {
+            "properties": {
+              "exists": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "applied"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "error"
+          ]
+        },
+        "properties": {
+          "after": {
+            "properties": {
+              "exists": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "required": [
+          "error"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.md$"
+    },
+    "fileState": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exists"
+          ],
+          "properties": {
+            "exists": {
+              "const": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exists",
+            "sourceHash"
+          ],
+          "properties": {
+            "exists": {
+              "const": true
+            },
+            "sourceHash": {
+              "$ref": "#/$defs/sourceHash"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

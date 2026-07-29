@@ -47,6 +47,7 @@ def make_vault(tmp_path: Path):
             json.dumps(manifest),
             encoding="utf-8",
         )
+        (root / "notes").mkdir()
         for relative, content in (notes or {}).items():
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)

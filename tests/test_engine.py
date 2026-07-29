@@ -226,7 +226,6 @@ def test_symlink_escape_is_rejected(make_vault, tmp_path: Path) -> None:
     outside = tmp_path / "outside.md"
     outside.write_text("# Outside\n", encoding="utf-8")
     notes = root / "notes"
-    notes.mkdir()
     (notes / "escaped.md").symlink_to(outside)
 
     result = scan_vault(root)

@@ -83,9 +83,9 @@ if observed agent workflows demonstrate a concrete need.
 
 ## Write boundary
 
-The public CLI remains read-only. Node mutation and semantic merge start with
-planning, exact candidate rendering, diffs, and whole-vault prospective
-validation; none updates a working tree, index, branch, or remote.
+Most public commands remain read-only. Node mutation and semantic merge start
+with planning, exact candidate rendering, diffs, and whole-vault prospective
+validation. Semantic merge has no public apply command.
 
 The first stage of the write contract is now exposed for one typed create or
 update:
@@ -94,14 +94,14 @@ update:
 2. a mutation plan with one exact path, an absence/hash precondition, candidate
    source, diff, and prospective validation;
 3. read-only render/diff commands that fail closed when the live vault no
-   longer matches the plan.
-
-A future public apply must be explicitly invoked by the caller and add
-confinement, repeated validation, atomic replacement, rollback, and a
-versioned receipt.
+   longer matches the plan;
+4. an explicit, capability-gated one-path apply that repeats all checks,
+   performs a local atomic create or update, validates the actual whole vault,
+   rolls back safe failures, and emits a versioned receipt.
 
 Git push is separate from local file atomicity. Repository manifests cannot
-execute hooks or arbitrary code.
+execute hooks or arbitrary code. The capability is a technical compatibility
+gate, not approval or authorization.
 
 ## Agent-mediated semantic merge
 
@@ -128,7 +128,7 @@ versioned. An internal synthetic-only transaction boundary proves one-path
 hash preconditions, prospective validation, atomic replace, rollback, and
 receipts. It is not exposed as a CLI command.
 
-The first agent-callable create/update planning primitives are implemented.
-Relations use the same typed frontmatter properties and prospective graph
-validation. An explicit safe apply remains the next separately gated
-milestone; automatic Git drivers remain out of scope.
+The first agent-callable create/update planning and explicit one-path apply
+primitives are implemented. Relations use the same typed frontmatter
+properties and prospective graph validation. Consumer rollout remains a
+separate gate; automatic Git drivers remain out of scope.

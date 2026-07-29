@@ -1,22 +1,22 @@
 # Prospective validation and transaction boundary
 
-The public CLI remains read-only. This milestone adds:
+The transaction surfaces are deliberately narrow:
 
 - `vaultctl node plan --request <file>` for a typed one-note create/update
   candidate and whole-vault prospective validation;
 - `vaultctl node render --plan <file>` and `node diff` for exact, stale-checked
   read-only evidence;
+- `vaultctl node apply --plan <file>` for an explicit capability-gated,
+  one-path local create or update with rollback and a versioned receipt;
 - `vaultctl merge validate --plan <file>` for whole-vault prospective
   validation;
-- an internal one-path transaction engine exercised only on synthetic
-  fixtures;
-- a versioned receipt for applied, failed, and rolled-back attempts.
+- an internal semantic-merge transaction engine exercised only on synthetic
+  fixtures.
 
-There is no public node or merge apply command yet.
+There is no public semantic-merge apply command.
 
-The internal apply function is a safety proof for future explicit,
-agent-callable write primitives. It is not an autonomous writer or Git
-workflow.
+The public node apply command is a deterministic local primitive. It is not an
+autonomous writer or Git workflow.
 
 ## Prospective validation
 
@@ -38,7 +38,31 @@ The scanner then overlays those bytes in memory and validates the entire
 prospective node/edge graph. No vault file is changed. The versioned result
 contains the rendered source hash, a whole-vault digest, counts, and issues.
 
-## Internal apply boundary
+## Public node apply boundary
+
+`node apply` supports one ready create or update plan. It requires the
+manifest capability `node-mutation-apply`, an existing parent for create, and
+an existing regular target for update.
+
+The sequence is:
+
+1. acquire a non-blocking cooperative lock on the manifest file;
+2. repeat all plan, path, manifest, engine, candidate, target, diff, and
+   prospective-validation checks;
+3. stage bytes in the target directory and fsync them;
+4. atomically create without overwrite or replace only the planned path;
+5. rescan the actual vault and compare it with the prospective result;
+6. emit an applied receipt, or restore the exact original state and emit a
+   failed/rolled-back receipt.
+
+Rollback proceeds only while the target still contains the exact candidate.
+An unexpected concurrent target change is preserved and reported as an unsafe
+rollback instead of being overwritten.
+
+`vaultctl.node-mutation-receipt/v1` binds the plan and validation digests,
+manifest and engine, exact before/final file states, and candidate source hash.
+
+## Internal semantic-merge apply boundary
 
 The internal transaction function deliberately supports only one existing
 Markdown path. It additionally requires the manifest capability
@@ -60,10 +84,10 @@ revisions, manifest digest, engine version, and before/final raw hashes.
 
 ## Safety boundary
 
-This milestone does not:
+These boundaries do not:
 
-- expose a write command in the CLI;
-- create, delete, rename, or modify multiple notes;
+- expose semantic-merge apply in the CLI;
+- delete, rename, create parents, or modify multiple notes;
 - stage or commit Git changes;
 - update a Git ref or contact a remote;
 - install a merge driver;
