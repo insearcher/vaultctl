@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/insearcher/vaultctl/main/src/vaultctl/schemas/merge-plan-v1.schema.json",
+  "title": "vaultctl semantic merge plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "planId",
+    "vaultId",
+    "path",
+    "engineVersion",
+    "manifestDigest",
+    "inputs",
+    "state",
+    "decisions",
+    "conflicts",
+    "candidate"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vaultctl.merge-plan/v1"
+    },
+    "planId": {
+      "$ref": "#/$defs/digest"
+    },
+    "vaultId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.md$"
+    },
+    "engineVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "manifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "base",
+        "ours",
+        "theirs"
+      ],
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/input"
+        },
+        "ours": {
+          "$ref": "#/$defs/input"
+        },
+        "theirs": {
+          "$ref": "#/$defs/input"
+        }
+      }
+    },
+    "state": {
+      "enum": [
+        "clean",
+        "conflict"
+      ]
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/decision"
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/conflict"
+      }
+    },
+    "candidate": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/candidate"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "clean"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "conflicts": {
+            "maxItems": 0
+          },
+          "candidate": {
+            "$ref": "#/$defs/candidate"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "conflicts": {
+            "minItems": 1
+          },
+          "candidate": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "sourceHash"
+      ],
+      "properties": {
+        "revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "sourceHash": {
+          "$ref": "#/$defs/sourceHash"
+        }
+      }
+    },
+    "missingSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present"
+      ],
+      "properties": {
+        "present": {
+          "const": false
+        }
+      }
+    },
+    "valueSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "value"
+      ],
+      "properties": {
+        "present": {
+          "const": true
+        },
+        "value": true
+      }
+    },
+    "bodySnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "present",
+        "sha256",
+        "characters"
+      ],
+      "properties": {
+        "present": {
+          "const": true
+        },
+        "sha256": {
+          "$ref": "#/$defs/sourceHash"
+        },
+        "characters": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "snapshot": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/missingSnapshot"
+        },
+        {
+          "$ref": "#/$defs/valueSnapshot"
+        },
+        {
+          "$ref": "#/$defs/bodySnapshot"
+        }
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "location",
+        "strategy",
+        "resolution",
+        "candidate"
+      ],
+      "properties": {
+        "location": {
+          "type": "string",
+          "minLength": 1
+        },
+        "strategy": {
+          "enum": [
+            "manual",
+            "scalar",
+            "set"
+          ]
+        },
+        "resolution": {
+          "enum": [
+            "unchanged",
+            "same-change",
+            "ours",
+            "theirs",
+            "set-merge"
+          ]
+        },
+        "candidate": {
+          "$ref": "#/$defs/snapshot"
+        }
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "location",
+        "strategy",
+        "message",
+        "base",
+        "ours",
+        "theirs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/digest"
+        },
+        "kind": {
+          "enum": [
+            "frontmatter.concurrent-change",
+            "frontmatter.type-conflict",
+            "body.concurrent-change"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1
+        },
+        "strategy": {
+          "enum": [
+            "manual",
+            "scalar",
+            "set"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "base": {
+          "$ref": "#/$defs/snapshot"
+        },
+        "ours": {
+          "$ref": "#/$defs/snapshot"
+        },
+        "theirs": {
+          "$ref": "#/$defs/snapshot"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "properties",
+        "body",
+        "contentHash"
+      ],
+      "properties": {
+        "properties": {
+          "type": "object"
+        },
+        "body": {
+          "type": "string"
+        },
+        "contentHash": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    }
+  }
+}

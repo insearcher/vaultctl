@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/insearcher/vaultctl/main/src/vaultctl/schemas/receipt-v1.schema.json",
+  "title": "vaultctl mutation receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "vaultId",
+    "operationId",
+    "paths",
+    "beforeHashes",
+    "afterHashes",
+    "state",
+    "planId",
+    "planDigest",
+    "inputRevisions",
+    "manifestDigest",
+    "engineVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vaultctl.receipt/v1"
+    },
+    "vaultId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "beforeHashes": {
+      "$ref": "#/$defs/hashes"
+    },
+    "afterHashes": {
+      "$ref": "#/$defs/hashes"
+    },
+    "state": {
+      "enum": [
+        "applied",
+        "rolled-back",
+        "failed"
+      ]
+    },
+    "planId": {
+      "$ref": "#/$defs/digest"
+    },
+    "planDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "inputRevisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "base",
+        "ours",
+        "theirs"
+      ],
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/revision"
+        },
+        "ours": {
+          "$ref": "#/$defs/revision"
+        },
+        "theirs": {
+          "$ref": "#/$defs/revision"
+        }
+      }
+    },
+    "manifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "engineVersion": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    }
+  }
+}

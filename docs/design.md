@@ -56,8 +56,11 @@ remain owned by `vaultctl`.
 
 ## Write boundary
 
-Write support is intentionally absent from the first release. A future write
-must have two explicit stages:
+Write support is intentionally absent from the first release. Semantic merge
+starts with a read-only planning stage; it does not update a working tree,
+index, branch, or remote.
+
+A future write must have two explicit stages:
 
 1. A mutation plan with exact paths, expected hashes, and a diff.
 2. An apply stage with confinement, validation, atomic replacement, rollback,
@@ -65,3 +68,26 @@ must have two explicit stages:
 
 Git push is separate from local file atomicity. Repository manifests cannot
 execute hooks or arbitrary code.
+
+## Git-native semantic merge
+
+Git and the hosting forge remain responsible for repositories, identity,
+review, branch protection, and serialized integration. `vaultctl` owns only
+schema-aware three-way planning and prospective validation.
+
+The first merge milestone is deliberately narrow:
+
+- one Markdown path and one base/ours/theirs triple;
+- exact input revisions, source hashes, manifest digest, and engine version;
+- deterministic frontmatter decisions;
+- conservative body handling;
+- typed conflicts with evidence;
+- no apply behavior, Git driver, network access, or forge adapter.
+
+Unknown and concurrent scalar changes fail closed. A manifest may declare a
+field as a mathematical set; only that strategy can combine independent list
+changes. Concurrent body changes always remain conflicts in v1.
+
+The plan, conflict, and future receipt formats are independently versioned.
+Only a later milestone may consume a clean candidate, after prospective
+vault validation, rollback, and receipt behavior exist.

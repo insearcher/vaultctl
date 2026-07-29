@@ -162,3 +162,97 @@ def test_stopword_only_search_and_context_are_no_hit(make_vault, capsys) -> None
     assert search_payload["hits"] == []
     assert context_exit == 1
     assert context_payload["hits"] == []
+
+
+def test_merge_plan_cli_is_read_only_and_versioned(make_vault, capsys) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "merge": {
+                "fields": {
+                    "status": {
+                        "strategy": "scalar",
+                    }
+                }
+            }
+        }
+    )
+    triples = root / ".triples"
+    triples.mkdir()
+    base = triples / "base.md"
+    ours = triples / "ours.md"
+    theirs = triples / "theirs.md"
+    base.write_text("---\nstatus: draft\n---\n# Example\n", encoding="utf-8")
+    ours.write_text("---\nstatus: ready\n---\n# Example\n", encoding="utf-8")
+    theirs.write_text("---\nstatus: draft\n---\n# Example\n", encoding="utf-8")
+    before = {path.name: path.read_bytes() for path in (base, ours, theirs)}
+
+    exit_code = main(
+        [
+            "--vault",
+            str(root),
+            "merge",
+            "plan",
+            "--path",
+            "notes/example.md",
+            "--base",
+            str(base),
+            "--ours",
+            str(ours),
+            "--theirs",
+            str(theirs),
+            "--base-revision",
+            "a" * 40,
+            "--ours-revision",
+            "b" * 40,
+            "--theirs-revision",
+            "c" * 40,
+        ]
+    )
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schemaVersion"] == "vaultctl.merge-plan/v1"
+    assert payload["state"] == "clean"
+    assert payload["candidate"]["properties"] == {"status": "ready"}
+    assert {path.name: path.read_bytes() for path in (base, ours, theirs)} == before
+
+
+def test_merge_plan_cli_returns_one_for_typed_conflict(make_vault, capsys) -> None:
+    root = make_vault()
+    triples = root / ".triples"
+    triples.mkdir()
+    base = triples / "base.md"
+    ours = triples / "ours.md"
+    theirs = triples / "theirs.md"
+    base.write_text("---\nstatus: draft\n---\n# Example\n", encoding="utf-8")
+    ours.write_text("---\nstatus: ready\n---\n# Example\n", encoding="utf-8")
+    theirs.write_text("---\nstatus: blocked\n---\n# Example\n", encoding="utf-8")
+
+    exit_code = main(
+        [
+            "--vault",
+            str(root),
+            "merge",
+            "plan",
+            "--path",
+            "notes/example.md",
+            "--base",
+            str(base),
+            "--ours",
+            str(ours),
+            "--theirs",
+            str(theirs),
+            "--base-revision",
+            "a" * 40,
+            "--ours-revision",
+            "b" * 40,
+            "--theirs-revision",
+            "c" * 40,
+        ]
+    )
+
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["state"] == "conflict"
+    assert payload["candidate"] is None
+    assert payload["conflicts"][0]["location"] == "frontmatter.status"

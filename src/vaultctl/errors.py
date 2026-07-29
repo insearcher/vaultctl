@@ -12,3 +12,7 @@ class MarkdownError(VaultctlError):
 
 class QueryError(VaultctlError):
     """A search or context query violates its manifest contract."""
+
+
+class MergeError(VaultctlError):
+    """A semantic merge plan cannot be produced safely."""

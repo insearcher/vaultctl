@@ -156,6 +156,107 @@ class ContextResult:
 
 
 @dataclass(frozen=True)
+class MergeInput:
+    revision: str
+    source_hash: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "revision": self.revision,
+            "sourceHash": self.source_hash,
+        }
+
+
+@dataclass(frozen=True)
+class Conflict:
+    id: str
+    kind: str
+    path: str
+    location: str
+    strategy: str
+    message: str
+    base: dict[str, Any]
+    ours: dict[str, Any]
+    theirs: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "path": self.path,
+            "location": self.location,
+            "strategy": self.strategy,
+            "message": self.message,
+            "base": self.base,
+            "ours": self.ours,
+            "theirs": self.theirs,
+        }
+
+
+@dataclass(frozen=True)
+class MergeDecision:
+    location: str
+    strategy: str
+    resolution: str
+    candidate: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "location": self.location,
+            "strategy": self.strategy,
+            "resolution": self.resolution,
+            "candidate": self.candidate,
+        }
+
+
+@dataclass(frozen=True)
+class MergeCandidate:
+    properties: dict[str, Any]
+    body: str
+    content_hash: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "properties": self.properties,
+            "body": self.body,
+            "contentHash": self.content_hash,
+        }
+
+
+@dataclass(frozen=True)
+class MergePlan:
+    schema_version: str
+    plan_id: str
+    vault_id: str
+    path: str
+    engine_version: str
+    manifest_digest: str
+    inputs: dict[str, MergeInput]
+    state: str
+    decisions: tuple[MergeDecision, ...]
+    conflicts: tuple[Conflict, ...]
+    candidate: MergeCandidate | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schemaVersion": self.schema_version,
+            "planId": self.plan_id,
+            "vaultId": self.vault_id,
+            "path": self.path,
+            "engineVersion": self.engine_version,
+            "manifestDigest": self.manifest_digest,
+            "inputs": {
+                name: merge_input.to_dict()
+                for name, merge_input in sorted(self.inputs.items())
+            },
+            "state": self.state,
+            "decisions": [decision.to_dict() for decision in self.decisions],
+            "conflicts": [conflict.to_dict() for conflict in self.conflicts],
+            "candidate": self.candidate.to_dict() if self.candidate else None,
+        }
+
+
+@dataclass(frozen=True)
 class MutationPlan:
     """Versioned future write contract; no apply behavior exists yet."""
 
@@ -177,3 +278,24 @@ class Receipt:
     before_hashes: dict[str, str]
     after_hashes: dict[str, str]
     state: str
+    plan_id: str
+    plan_digest: str
+    input_revisions: dict[str, str]
+    manifest_digest: str
+    engine_version: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schemaVersion": self.schema_version,
+            "vaultId": self.vault_id,
+            "operationId": self.operation_id,
+            "paths": list(self.paths),
+            "beforeHashes": self.before_hashes,
+            "afterHashes": self.after_hashes,
+            "state": self.state,
+            "planId": self.plan_id,
+            "planDigest": self.plan_digest,
+            "inputRevisions": self.input_revisions,
+            "manifestDigest": self.manifest_digest,
+            "engineVersion": self.engine_version,
+        }

@@ -5,8 +5,8 @@ Notes remain ordinary Markdown files; a declarative manifest describes node
 kinds, fields, tags, and typed relations.
 
 > **Status:** pre-alpha and read-only. The current release can scan, validate,
-> export a graph, search, and assemble bounded context. It does not modify
-> vault contents.
+> export a graph, search, assemble bounded context, and produce semantic merge
+> plans. It does not modify vault contents.
 
 ## Install
 
@@ -69,10 +69,16 @@ modules.
 | `graph export` | Export a compact versioned graph |
 | `search` | Rank notes with manifest-defined zones |
 | `context` | Return ranked notes and snippets within an output budget |
+| `merge plan` | Produce a fail-closed semantic plan for one three-way Markdown merge |
 | `doctor` | Check vault discovery and available execution backends |
 
 All machine-readable output includes a schema version. See
 [the compatibility contract](docs/compatibility.md).
+
+`merge plan` is intentionally not an apply command. It reads a base/ours/theirs
+triple, records exact revisions and content hashes, applies only declarative
+manifest policy, and returns either a candidate or typed conflicts. See
+[the semantic merge contract](docs/semantic-merge.md).
 
 ## Development
 
