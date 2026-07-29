@@ -1,6 +1,6 @@
 # Prospective validation and transaction boundary
 
-The public CLI remains read-only. This milestone adds:
+The general vault CLI remains read-only. This milestone adds:
 
 - `vaultctl merge validate --plan <file>` for whole-vault prospective
   validation;
@@ -8,7 +8,8 @@ The public CLI remains read-only. This milestone adds:
   fixtures;
 - a versioned receipt for applied, failed, and rolled-back attempts.
 
-There is no public `merge apply` command yet.
+There is no public `merge apply` command. The later Git custom driver has its
+own narrower protocol and does not call this vault transaction function.
 
 ## Prospective validation
 
@@ -52,13 +53,13 @@ revisions, manifest digest, engine version, and before/final raw hashes.
 
 ## Safety boundary
 
-This milestone does not:
+This transaction milestone does not:
 
 - expose a write command in the CLI;
 - create, delete, rename, or modify multiple notes;
 - stage or commit Git changes;
 - update a Git ref or contact a remote;
-- install a merge driver;
+- configure or install a merge driver;
 - execute repository code, hooks, templates, or network requests;
 - authorize a write merely because a manifest capability is present.
 

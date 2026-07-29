@@ -1,0 +1,184 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/insearcher/vaultctl/main/src/vaultctl/schemas/merge-driver-v1.schema.json",
+  "title": "vaultctl Git merge driver receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "operationId",
+    "vaultId",
+    "path",
+    "state",
+    "planId",
+    "planDigest",
+    "inputRevisions",
+    "manifestDigest",
+    "engineVersion",
+    "beforeHash",
+    "afterHash",
+    "conflicts"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vaultctl.merge-driver/v1"
+    },
+    "operationId": {
+      "$ref": "#/$defs/digest"
+    },
+    "vaultId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.md$"
+    },
+    "state": {
+      "enum": [
+        "applied",
+        "unchanged",
+        "conflict",
+        "failed",
+        "rolled-back"
+      ]
+    },
+    "planId": {
+      "$ref": "#/$defs/digest"
+    },
+    "planDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "inputRevisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "base",
+        "ours",
+        "theirs"
+      ],
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/revision"
+        },
+        "ours": {
+          "$ref": "#/$defs/revision"
+        },
+        "theirs": {
+          "$ref": "#/$defs/revision"
+        }
+      }
+    },
+    "manifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "engineVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "beforeHash": {
+      "$ref": "#/$defs/sourceHash"
+    },
+    "afterHash": {
+      "$ref": "#/$defs/sourceHash"
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/conflict"
+      }
+    },
+    "error": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "conflict"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "conflicts": {
+            "minItems": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "conflicts": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "enum": [
+              "failed",
+              "rolled-back"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "error"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "error"
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "location"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/digest"
+        },
+        "kind": {
+          "enum": [
+            "frontmatter.concurrent-change",
+            "frontmatter.type-conflict",
+            "body.concurrent-change"
+          ]
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

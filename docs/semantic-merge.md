@@ -72,14 +72,18 @@ synthetic apply invariants.
 
 ## Explicit non-goals
 
-The public merge CLI does not:
+The read-only `merge plan` and `merge validate` commands do not:
 
 - write a Markdown file;
 - update the Git index, working tree, ref, or remote;
-- run `git merge` or install a custom merge driver;
+- run `git merge` or install/configure a custom merge driver;
 - connect to GitHub, Bitbucket, GitLab, or Forgejo;
 - execute repository-provided code;
 - invoke an LLM to resolve conflicts.
+
+The separately gated `merge driver` command is documented in
+[Git merge driver](git-merge-driver.md). It uses the same plan contract but
+may replace only the `%A` file supplied by Git.
 
 ## Corpus gate
 

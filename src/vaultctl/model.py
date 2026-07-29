@@ -283,6 +283,46 @@ class ProspectiveValidation:
 
 
 @dataclass(frozen=True)
+class GitDriverReceipt:
+    """Versioned evidence from one Git custom-driver invocation."""
+
+    schema_version: str
+    operation_id: str
+    vault_id: str
+    path: str
+    state: str
+    plan_id: str
+    plan_digest: str
+    input_revisions: dict[str, str]
+    manifest_digest: str
+    engine_version: str
+    before_hash: str
+    after_hash: str
+    conflicts: tuple[dict[str, str], ...] = ()
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        data = {
+            "schemaVersion": self.schema_version,
+            "operationId": self.operation_id,
+            "vaultId": self.vault_id,
+            "path": self.path,
+            "state": self.state,
+            "planId": self.plan_id,
+            "planDigest": self.plan_digest,
+            "inputRevisions": self.input_revisions,
+            "manifestDigest": self.manifest_digest,
+            "engineVersion": self.engine_version,
+            "beforeHash": self.before_hash,
+            "afterHash": self.after_hash,
+            "conflicts": list(self.conflicts),
+        }
+        if self.error is not None:
+            data["error"] = self.error
+        return data
+
+
+@dataclass(frozen=True)
 class MutationPlan:
     """Versioned future write contract; no apply behavior exists yet."""
 

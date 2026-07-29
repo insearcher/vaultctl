@@ -4,10 +4,10 @@
 Notes remain ordinary Markdown files; a declarative manifest describes node
 kinds, fields, tags, and typed relations.
 
-> **Status:** pre-alpha. The public CLI is read-only: it can scan, validate,
-> export a graph, search, assemble bounded context, produce semantic merge
-> plans, and validate a candidate against the prospective whole vault. It does
-> not expose a write command.
+> **Status:** pre-alpha. Inspection, planning, and prospective validation are
+> read-only. The only public write surface is an opt-in Git custom driver that
+> may replace Git's single `%A` merge file; it does not provide a general vault
+> write command.
 
 ## Install
 
@@ -72,6 +72,7 @@ modules.
 | `context` | Return ranked notes and snippets within an output budget |
 | `merge plan` | Produce a fail-closed semantic plan for one three-way Markdown merge |
 | `merge validate` | Validate a clean plan against the prospective whole vault |
+| `merge driver` | Resolve one Git custom-driver triple and update only `%A` |
 | `doctor` | Check vault discovery and available execution backends |
 
 All machine-readable output includes a schema version. See
@@ -82,8 +83,12 @@ triple, records exact revisions and content hashes, applies only declarative
 manifest policy, and returns either a candidate or typed conflicts. See
 [the semantic merge contract](docs/semantic-merge.md).
 
-The internal one-path transaction boundary is not a supported CLI surface and
-is tested only on synthetic vaults. See
+The Git driver is an explicit, locally configured integration and remains
+limited to synthetic/throwaway repositories in this pre-alpha phase. See
+[the Git merge driver](docs/git-merge-driver.md).
+
+The separate one-path transaction boundary is still internal and tested only
+on synthetic vaults. See
 [prospective validation and transactions](docs/transactions.md).
 
 ## Development

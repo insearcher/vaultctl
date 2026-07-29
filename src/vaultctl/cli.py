@@ -11,6 +11,7 @@ from typing import Any
 from vaultctl import __version__
 from vaultctl.engine import scan_vault
 from vaultctl.errors import VaultctlError
+from vaultctl.git_driver import run_git_merge_driver
 from vaultctl.manifest import load_manifest, resolve_vault_root
 from vaultctl.merge import load_merge_plan, plan_merge_files
 from vaultctl.model import ContextResult, ScanResult, SearchHit
@@ -75,6 +76,14 @@ def _parser() -> argparse.ArgumentParser:
         help="Validate a clean merge plan against the prospective whole vault.",
     )
     merge_validate.add_argument("--plan", type=Path, required=True)
+    merge_driver = merge_commands.add_parser(
+        "driver",
+        help="Run the path-scoped Git custom merge driver.",
+    )
+    merge_driver.add_argument("--path", required=True)
+    merge_driver.add_argument("--base", type=Path, required=True)
+    merge_driver.add_argument("--ours", type=Path, required=True)
+    merge_driver.add_argument("--theirs", type=Path, required=True)
     return parser
 
 
@@ -263,6 +272,11 @@ def _render_text(payload: dict[str, Any]) -> str:
             f"prospective merge validation {status}: {payload['path']} "
             f"({summary['errors']} error(s), {summary['warnings']} warning(s))"
         )
+    if schema == "vaultctl.merge-driver/v1":
+        suffix = (
+            f", {len(payload['conflicts'])} conflict(s)" if payload["conflicts"] else ""
+        )
+        return f"Git merge driver {payload['state']}: {payload['path']}{suffix}"
     return (
         f"scan: {len(payload['nodes'])} node(s), "
         f"{len(payload['edges'])} edge(s), "
@@ -300,6 +314,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 _emit(plan.to_dict(), args.format)
                 return 0 if plan.state == "clean" else 1
+            if args.merge_command == "driver":
+                receipt = run_git_merge_driver(
+                    manifest,
+                    path=args.path,
+                    base_path=args.base,
+                    ours_path=args.ours,
+                    theirs_path=args.theirs,
+                )
+                _emit(receipt.to_dict(), args.format)
+                if receipt.state == "conflict":
+                    return 1
+                if receipt.state in {"failed", "rolled-back"}:
+                    return 2
+                return 0
             plan = load_merge_plan(args.plan)
             validation = validate_merge_plan(manifest, plan)
             _emit(validation.to_dict(), args.format)
