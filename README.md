@@ -4,9 +4,10 @@
 Notes remain ordinary Markdown files; a declarative manifest describes node
 kinds, fields, tags, and typed relations.
 
-> **Status:** pre-alpha and read-only. The current release can scan, validate,
-> export a graph, search, assemble bounded context, and produce semantic merge
-> plans. It does not modify vault contents.
+> **Status:** pre-alpha. The public CLI is read-only: it can scan, validate,
+> export a graph, search, assemble bounded context, produce semantic merge
+> plans, and validate a candidate against the prospective whole vault. It does
+> not expose a write command.
 
 ## Install
 
@@ -70,6 +71,7 @@ modules.
 | `search` | Rank notes with manifest-defined zones |
 | `context` | Return ranked notes and snippets within an output budget |
 | `merge plan` | Produce a fail-closed semantic plan for one three-way Markdown merge |
+| `merge validate` | Validate a clean plan against the prospective whole vault |
 | `doctor` | Check vault discovery and available execution backends |
 
 All machine-readable output includes a schema version. See
@@ -79,6 +81,10 @@ All machine-readable output includes a schema version. See
 triple, records exact revisions and content hashes, applies only declarative
 manifest policy, and returns either a candidate or typed conflicts. See
 [the semantic merge contract](docs/semantic-merge.md).
+
+The internal one-path transaction boundary is not a supported CLI surface and
+is tested only on synthetic vaults. See
+[prospective validation and transactions](docs/transactions.md).
 
 ## Development
 

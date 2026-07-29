@@ -16,7 +16,8 @@
     "planDigest",
     "inputRevisions",
     "manifestDigest",
-    "engineVersion"
+    "engineVersion",
+    "validationDigest"
   ],
   "properties": {
     "schemaVersion": {
@@ -27,16 +28,14 @@
       "minLength": 1
     },
     "operationId": {
-      "type": "string",
-      "minLength": 1
+      "$ref": "#/$defs/digest"
     },
     "paths": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
       "items": {
-        "type": "string",
-        "minLength": 1
+        "$ref": "#/$defs/path"
       }
     },
     "beforeHashes": {
@@ -84,12 +83,46 @@
     "engineVersion": {
       "type": "string",
       "minLength": 1
+    },
+    "validationDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "error": {
+      "type": "string",
+      "minLength": 1
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "applied"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "error"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "error"
+        ]
+      }
+    }
+  ],
   "$defs": {
     "digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.md$"
     },
     "revision": {
       "type": "string",
@@ -97,6 +130,10 @@
     },
     "hashes": {
       "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/path"
+      },
       "additionalProperties": {
         "type": "string",
         "pattern": "^[0-9a-f]{64}$"

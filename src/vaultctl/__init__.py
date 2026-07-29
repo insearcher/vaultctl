@@ -6,6 +6,7 @@ from vaultctl.model import (
     MergePlan,
     MutationPlan,
     Node,
+    ProspectiveValidation,
     Receipt,
     VaultManifest,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "MergePlan",
     "MutationPlan",
     "Node",
+    "ProspectiveValidation",
     "Receipt",
     "VaultManifest",
 ]

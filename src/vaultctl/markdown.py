@@ -6,6 +6,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, time
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,20 @@ def _to_plain(value: Any) -> Any:
     return str(value)
 
 
+def _plain_equal(left: Any, right: Any) -> bool:
+    return json.dumps(
+        left,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ) == json.dumps(
+        right,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
 def _quote_legacy_colon_scalars(frontmatter: str) -> str:
     normalized = []
     for line in frontmatter.splitlines(keepends=True):
@@ -78,6 +93,86 @@ def _quote_legacy_colon_scalars(frontmatter: str) -> str:
     return "".join(normalized)
 
 
+def _load_document(
+    text: str,
+    *,
+    display_path: str,
+    allow_legacy_colon_scalars: bool = False,
+) -> tuple[Mapping[str, Any], str, bool]:
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return {}, text, False
+
+    closing_index = next(
+        (
+            index
+            for index, line in enumerate(lines[1:], start=1)
+            if line.strip() in {"---", "..."}
+        ),
+        None,
+    )
+    if closing_index is None:
+        raise MarkdownError(f"{display_path} has unclosed frontmatter")
+
+    yaml = YAML(typ="rt")
+    yaml.allow_duplicate_keys = False
+    yaml.preserve_quotes = True
+    frontmatter = "".join(lines[1:closing_index])
+    try:
+        loaded = yaml.load(frontmatter) or {}
+    except Exception as strict_exc:
+        if not allow_legacy_colon_scalars:
+            raise MarkdownError(
+                f"{display_path} has invalid YAML frontmatter: {strict_exc}"
+            ) from strict_exc
+
+        normalized = _quote_legacy_colon_scalars(frontmatter)
+        if normalized == frontmatter:
+            raise MarkdownError(
+                f"{display_path} has invalid YAML frontmatter: {strict_exc}"
+            ) from strict_exc
+        try:
+            loaded = yaml.load(normalized) or {}
+        except Exception as fallback_exc:
+            raise MarkdownError(
+                f"{display_path} has invalid YAML frontmatter: {fallback_exc}"
+            ) from fallback_exc
+    if not isinstance(loaded, Mapping):
+        raise MarkdownError(f"{display_path} frontmatter must be a mapping")
+    return loaded, "".join(lines[closing_index + 1 :]), True
+
+
+def parse_markdown_bytes(
+    raw: bytes,
+    *,
+    display_path: str,
+    fallback_stem: str,
+    allow_legacy_colon_scalars: bool = False,
+) -> ParsedMarkdown:
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise MarkdownError(f"{display_path} is not valid UTF-8") from exc
+
+    loaded, body, _ = _load_document(
+        text,
+        display_path=display_path,
+        allow_legacy_colon_scalars=allow_legacy_colon_scalars,
+    )
+    properties = _to_plain(loaded)
+
+    headings = tuple(match.group(1).strip() for match in HEADING_RE.finditer(body))
+    h1 = H1_RE.search(body)
+    title = h1.group(1).strip() if h1 else fallback_stem
+    return ParsedMarkdown(
+        properties=properties,
+        body=body,
+        title=title,
+        headings=headings,
+        source_hash=hashlib.sha256(raw).hexdigest(),
+    )
+
+
 def parse_markdown(
     path: Path,
     *,
@@ -86,66 +181,69 @@ def parse_markdown(
 ) -> ParsedMarkdown:
     try:
         raw = path.read_bytes()
-        text = raw.decode("utf-8")
     except OSError as exc:
         raise MarkdownError(f"cannot read {display_path}: {exc}") from exc
+    return parse_markdown_bytes(
+        raw,
+        display_path=display_path,
+        fallback_stem=path.stem,
+        allow_legacy_colon_scalars=allow_legacy_colon_scalars,
+    )
+
+
+def render_markdown_candidate(
+    current: bytes,
+    *,
+    properties: dict[str, Any],
+    body: str,
+    display_path: str,
+    allow_legacy_colon_scalars: bool = False,
+) -> bytes:
+    try:
+        text = current.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise MarkdownError(f"{display_path} is not valid UTF-8") from exc
 
-    properties: dict[str, Any] = {}
-    body = text
-    lines = text.splitlines(keepends=True)
-
-    if lines and lines[0].strip() == "---":
+    loaded, current_body, had_frontmatter = _load_document(
+        text,
+        display_path=display_path,
+        allow_legacy_colon_scalars=allow_legacy_colon_scalars,
+    )
+    loaded_properties = _to_plain(loaded)
+    if _plain_equal(loaded_properties, properties):
+        if current_body == body:
+            return current
+        if not had_frontmatter:
+            return body.encode("utf-8")
+        lines = text.splitlines(keepends=True)
         closing_index = next(
-            (
-                index
-                for index, line in enumerate(lines[1:], start=1)
-                if line.strip() in {"---", "..."}
-            ),
-            None,
+            index
+            for index, line in enumerate(lines[1:], start=1)
+            if line.strip() in {"---", "..."}
         )
-        if closing_index is None:
-            raise MarkdownError(f"{display_path} has unclosed frontmatter")
+        prefix = "".join(lines[: closing_index + 1])
+        return f"{prefix}{body}".encode()
+    if not had_frontmatter and not properties:
+        return body.encode("utf-8")
 
+    for key in tuple(loaded):
+        if key not in properties:
+            del loaded[key]
+    for key, value in properties.items():
+        if key not in loaded or not _plain_equal(_to_plain(loaded[key]), value):
+            loaded[key] = value
+
+    serialized = ""
+    if loaded:
+        stream = StringIO()
         yaml = YAML(typ="rt")
         yaml.allow_duplicate_keys = False
         yaml.preserve_quotes = True
-        frontmatter = "".join(lines[1:closing_index])
-        try:
-            loaded = yaml.load(frontmatter) or {}
-        except Exception as strict_exc:
-            if not allow_legacy_colon_scalars:
-                raise MarkdownError(
-                    f"{display_path} has invalid YAML frontmatter: {strict_exc}"
-                ) from strict_exc
-
-            normalized = _quote_legacy_colon_scalars(frontmatter)
-            if normalized == frontmatter:
-                raise MarkdownError(
-                    f"{display_path} has invalid YAML frontmatter: {strict_exc}"
-                ) from strict_exc
-            try:
-                loaded = yaml.load(normalized) or {}
-            except Exception as fallback_exc:
-                raise MarkdownError(
-                    f"{display_path} has invalid YAML frontmatter: {fallback_exc}"
-                ) from fallback_exc
-        if not isinstance(loaded, Mapping):
-            raise MarkdownError(f"{display_path} frontmatter must be a mapping")
-        properties = _to_plain(loaded)
-        body = "".join(lines[closing_index + 1 :])
-
-    headings = tuple(match.group(1).strip() for match in HEADING_RE.finditer(body))
-    h1 = H1_RE.search(body)
-    title = h1.group(1).strip() if h1 else path.stem
-    return ParsedMarkdown(
-        properties=properties,
-        body=body,
-        title=title,
-        headings=headings,
-        source_hash=hashlib.sha256(raw).hexdigest(),
-    )
+        yaml.dump(loaded, stream)
+        serialized = stream.getvalue()
+        if serialized and not serialized.endswith("\n"):
+            serialized += "\n"
+    return f"---\n{serialized}---\n{body}".encode()
 
 
 def extract_body_links(body: str) -> tuple[tuple[str, str], ...]:

@@ -230,3 +230,8 @@ opted into per field. `bodyStrategy` is fixed to `manual` in manifest v1.
 
 The manifest cannot name commands, hooks, modules, or merge-driver
 executables. It describes policy only.
+
+The internal synthetic transaction boundary additionally checks for the
+capability ID `semantic-merge-apply`. This is a technical fail-closed gate,
+not user authorization and not a public write interface. Consumer manifests
+should not enable it before a separately reviewed real-vault pilot.

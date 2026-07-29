@@ -1,8 +1,8 @@
-# Semantic merge Phase 0
+# Semantic merge
 
-`vaultctl merge plan` is a read-only, deterministic three-way planner for one
-Markdown path. It is the contract spike before any Git merge driver or write
-support.
+`vaultctl merge plan` is the Phase 0 read-only, deterministic three-way
+planner for one Markdown path. It is the contract spike before any Git merge
+driver or public write support.
 
 ## Command
 
@@ -54,14 +54,29 @@ Every plan contains:
 The candidate is structured evidence, not an applied file. Conflict plans
 always omit it by returning `null`.
 
+## Prospective validation
+
+Save a clean plan as JSON, then validate it without changing the vault:
+
+```bash
+vaultctl --vault examples/basic-vault merge validate --plan plan.json
+```
+
+The command verifies the plan, exact manifest/engine/current target hash,
+renders the candidate over the current `ours` document, and scans the entire
+prospective vault through an in-memory overlay. The result uses
+`vaultctl.merge-validation/v1`.
+
+See [the transaction boundary](transactions.md) for the validation and
+synthetic apply invariants.
+
 ## Explicit non-goals
 
-Phase 0 does not:
+The public merge CLI does not:
 
 - write a Markdown file;
 - update the Git index, working tree, ref, or remote;
 - run `git merge` or install a custom merge driver;
-- validate a prospective whole-vault graph;
 - connect to GitHub, Bitbucket, GitLab, or Forgejo;
 - execute repository-provided code;
 - invoke an LLM to resolve conflicts.

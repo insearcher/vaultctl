@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import posixpath
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -13,6 +14,7 @@ from vaultctl.markdown import (
     extract_body_links,
     normalize_tags,
     parse_markdown,
+    parse_markdown_bytes,
 )
 from vaultctl.model import Edge, Node, ScanResult, ValidationIssue, VaultManifest
 
@@ -370,8 +372,13 @@ def _cycle_issues(
     return tuple(issues)
 
 
-def scan_vault(root: Path) -> ScanResult:
+def scan_vault(
+    root: Path,
+    *,
+    overlays: Mapping[str, bytes] | None = None,
+) -> ScanResult:
     manifest = load_manifest(root)
+    prospective = dict(overlays or {})
     pending: list[_PendingNode] = []
     issues: list[ValidationIssue] = []
 
@@ -391,11 +398,19 @@ def scan_vault(root: Path) -> ScanResult:
             )
             continue
         try:
-            parsed = parse_markdown(
-                path,
-                display_path=relative,
-                allow_legacy_colon_scalars=manifest.allow_legacy_colon_scalars,
-            )
+            if relative in prospective:
+                parsed = parse_markdown_bytes(
+                    prospective.pop(relative),
+                    display_path=relative,
+                    fallback_stem=path.stem,
+                    allow_legacy_colon_scalars=manifest.allow_legacy_colon_scalars,
+                )
+            else:
+                parsed = parse_markdown(
+                    path,
+                    display_path=relative,
+                    allow_legacy_colon_scalars=manifest.allow_legacy_colon_scalars,
+                )
         except MarkdownError as exc:
             issues.append(
                 ValidationIssue(
@@ -428,6 +443,13 @@ def scan_vault(root: Path) -> ScanResult:
         )
         issues.extend(_validate_fields(node, manifest))
         pending.append(_PendingNode(node=node, body=parsed.body))
+
+    if prospective:
+        joined = ", ".join(sorted(prospective))
+        raise MarkdownError(
+            "prospective overlays must target existing, included Markdown paths: "
+            f"{joined}"
+        )
 
     node_ids = {item.node.id for item in pending}
     basename_index: dict[str, set[str]] = {}
