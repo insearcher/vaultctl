@@ -111,6 +111,7 @@ class SearchHit:
     score: int
     matched_zones: tuple[str, ...]
     snippets: tuple[str, ...] = ()
+    properties: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -121,12 +122,34 @@ class SearchHit:
             "score": self.score,
             "matchedZones": list(self.matched_zones),
             "snippets": list(self.snippets),
+            "properties": self.properties,
+        }
+
+
+@dataclass(frozen=True)
+class ContextGroup:
+    key: str
+    score: int
+    count: int
+    representative: str
+    top_match: str | None
+    hits: tuple[SearchHit, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "key": self.key,
+            "score": self.score,
+            "count": self.count,
+            "representative": self.representative,
+            "topMatch": self.top_match,
+            "hits": [hit.to_dict() for hit in self.hits],
         }
 
 
 @dataclass(frozen=True)
 class ContextResult:
     hits: tuple[SearchHit, ...]
+    groups: tuple[ContextGroup, ...]
     max_characters: int
     used_characters: int
     truncated: bool

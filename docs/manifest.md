@@ -120,7 +120,8 @@ adds `phraseWeight` for the complete query phrase.
     "maxCharacters": 12000,
     "snippetLines": 2,
     "snippetCharacters": 220,
-    "fallbackToTitle": true
+    "fallbackToTitle": true,
+    "outputFields": ["status", "updated"]
   }
 }
 ```
@@ -133,3 +134,33 @@ general-purpose scorer. Context reuses the search ranking and adds matching
 body lines without exceeding the manifest's content-character budget. When a
 matching body line is absent, `fallbackToTitle` controls whether the note title
 is returned as a fallback snippet.
+
+Context may also group ranked notes without changing search scoring:
+
+```json
+{
+  "context": {
+    "grouping": {
+      "fields": ["topic", "ticket"],
+      "pathToken": "ticket",
+      "keyCase": "upper",
+      "statusField": "status",
+      "inactiveStatuses": ["archived", "superseded"],
+      "freshnessFields": ["updated", "created"],
+      "notesPerGroup": 2
+    }
+  }
+}
+```
+
+The first non-empty configured field becomes the group key. The built-in
+`ticket` path token recognizes conventional ticket IDs with at least two
+digits case-insensitively, stops before a descriptive suffix, and also
+recognizes `adhoc-YYYY-MM-DD-*` IDs. `keyCase` optionally normalizes both
+explicit and path-derived keys; notes without either key source fall back to
+their own path.
+Groups rank by their best search hit. Within a group, non-inactive notes come
+first, followed by the freshest ISO date, score, and path. The response keeps
+both the freshness-selected `representative` and a distinct relevance-selected
+`topMatch` when needed. `outputFields` is an explicit allowlist of frontmatter
+properties to project into context hits; unspecified properties stay internal.

@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import json
 import re
+from collections import defaultdict
+from dataclasses import dataclass
+from datetime import date
 from pathlib import PurePosixPath
 from typing import Any
 
 from vaultctl.errors import QueryError
-from vaultctl.model import ContextResult, Node, ScanResult, SearchHit
+from vaultctl.model import ContextGroup, ContextResult, Node, ScanResult, SearchHit
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
+TICKET_RE = re.compile(
+    r"\b(adhoc-\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+|"
+    r"[A-Za-z]{2,}-\d{2,})\b"
+)
 DEFAULT_STOP_WORDS = frozenset(
     {
         "a",
@@ -43,6 +50,16 @@ MAX_CONTEXT_LIMIT = 20
 DEFAULT_CONTEXT_CHARACTERS = 12000
 DEFAULT_SNIPPET_LINES = 2
 DEFAULT_SNIPPET_CHARACTERS = 220
+
+
+@dataclass(frozen=True)
+class _RankedGroup:
+    key: str
+    score: int
+    count: int
+    representative: str
+    top_match: str | None
+    hits: tuple[SearchHit, ...]
 
 
 def _search_config(result: ScanResult) -> dict[str, Any]:
@@ -225,6 +242,115 @@ def _snippets(
     return tuple(snippets)
 
 
+def _normalize_group_key(value: str, config: dict[str, Any]) -> str:
+    key_case = config.get("keyCase", "preserve")
+    if key_case == "upper":
+        return value.upper()
+    if key_case == "lower":
+        return value.lower()
+    return value
+
+
+def _group_key(node: Node, config: dict[str, Any]) -> str:
+    for field in config.get("fields", ()):
+        value = node.properties.get(field)
+        if isinstance(value, str) and value.strip():
+            return _normalize_group_key(value.strip(), config)
+    if config.get("pathToken") == "ticket":
+        for segment in PurePosixPath(node.path).parts:
+            match = TICKET_RE.search(segment)
+            if match is not None:
+                return _normalize_group_key(match.group(1), config)
+    return node.path
+
+
+def _freshness(node: Node, config: dict[str, Any]) -> str:
+    for field in config.get("freshnessFields", ("updated", "created")):
+        value = node.properties.get(field)
+        if isinstance(value, str) and value:
+            try:
+                date.fromisoformat(value)
+            except ValueError:
+                continue
+            return value
+    return ""
+
+
+def _group_hits(
+    hits: tuple[SearchHit, ...],
+    *,
+    nodes: dict[str, Node],
+    config: dict[str, Any],
+) -> tuple[_RankedGroup, ...]:
+    grouped: dict[str, list[SearchHit]] = defaultdict(list)
+    for hit in hits:
+        grouped[_group_key(nodes[hit.node_id], config)].append(hit)
+
+    status_field = config.get("statusField", "status")
+    inactive = set(config.get("inactiveStatuses", ("archived", "superseded")))
+    notes_per_group = config.get("notesPerGroup", 2)
+    ranked = []
+    for key, members in grouped.items():
+        best = min(members, key=lambda hit: (-hit.score, hit.path))
+        ordered = sorted(members, key=lambda hit: hit.path)
+        ordered.sort(key=lambda hit: hit.score, reverse=True)
+        ordered.sort(
+            key=lambda hit: _freshness(nodes[hit.node_id], config), reverse=True
+        )
+        ordered.sort(
+            key=lambda hit: nodes[hit.node_id].properties.get(status_field) in inactive
+        )
+        representative = ordered[0].path
+        ranked.append(
+            _RankedGroup(
+                key=key,
+                score=best.score,
+                count=len(ordered),
+                representative=representative,
+                top_match=best.path if best.path != representative else None,
+                hits=tuple(ordered[:notes_per_group]),
+            )
+        )
+    ranked.sort(key=lambda group: (-group.score, group.key))
+    return tuple(ranked)
+
+
+def _context_hit(
+    hit: SearchHit,
+    *,
+    node: Node,
+    tokens: tuple[str, ...],
+    snippet_lines: int,
+    snippet_characters: int,
+    fallback_to_title: bool,
+    output_fields: tuple[str, ...],
+) -> SearchHit:
+    return SearchHit(
+        node_id=hit.node_id,
+        path=hit.path,
+        kind=hit.kind,
+        title=hit.title,
+        score=hit.score,
+        matched_zones=hit.matched_zones,
+        snippets=_snippets(
+            node,
+            tokens=tokens,
+            max_lines=snippet_lines,
+            max_characters=snippet_characters,
+            fallback_to_title=fallback_to_title,
+        ),
+        properties={
+            field: node.properties[field]
+            for field in output_fields
+            if field in node.properties
+        },
+    )
+
+
+def _hit_cost(hit: SearchHit) -> int:
+    return len(hit.path) + len(hit.title) + sum(len(item) for item in hit.snippets)
+
+
 def context(
     result: ScanResult,
     query: str,
@@ -246,41 +372,77 @@ def context(
     snippet_lines = config.get("snippetLines", DEFAULT_SNIPPET_LINES)
     snippet_characters = config.get("snippetCharacters", DEFAULT_SNIPPET_CHARACTERS)
     fallback_to_title = config.get("fallbackToTitle", True)
+    output_fields = tuple(config.get("outputFields", ()))
     tokens = tokenize(query, stop_words=_stop_words(result))
-    search_hits = _rank(result, query)[:resolved_limit]
     nodes = {node.id: node for node in result.nodes}
-    selected = []
+    ranked_hits = _rank(result, query)
     used = 0
     truncated = False
-    for hit in search_hits:
-        node = nodes[hit.node_id]
-        snippets = _snippets(
-            node,
-            tokens=tokens,
-            max_lines=snippet_lines,
-            max_characters=snippet_characters,
-            fallback_to_title=fallback_to_title,
-        )
-        cost = len(hit.path) + len(hit.title) + sum(len(item) for item in snippets)
-        if used + cost > max_characters:
-            truncated = True
-            break
-        selected.append(
-            SearchHit(
-                node_id=hit.node_id,
-                path=hit.path,
-                kind=hit.kind,
-                title=hit.title,
-                score=hit.score,
-                matched_zones=hit.matched_zones,
-                snippets=snippets,
+    selected: list[SearchHit] = []
+    selected_groups: list[ContextGroup] = []
+    grouping = config.get("grouping")
+
+    if grouping:
+        ranked_groups = _group_hits(ranked_hits, nodes=nodes, config=grouping)[
+            :resolved_limit
+        ]
+        for group in ranked_groups:
+            group_hits = []
+            for hit in group.hits:
+                rendered = _context_hit(
+                    hit,
+                    node=nodes[hit.node_id],
+                    tokens=tokens,
+                    snippet_lines=snippet_lines,
+                    snippet_characters=snippet_characters,
+                    fallback_to_title=fallback_to_title,
+                    output_fields=output_fields,
+                )
+                cost = _hit_cost(rendered)
+                if used + cost > max_characters:
+                    truncated = True
+                    break
+                group_hits.append(rendered)
+                selected.append(rendered)
+                used += cost
+            if not group_hits:
+                break
+            selected_groups.append(
+                ContextGroup(
+                    key=group.key,
+                    score=group.score,
+                    count=group.count,
+                    representative=group.representative,
+                    top_match=group.top_match,
+                    hits=tuple(group_hits),
+                )
             )
-        )
-        used += cost
-    if len(selected) < len(search_hits):
-        truncated = True
+            if truncated:
+                break
+    else:
+        search_hits = ranked_hits[:resolved_limit]
+        for hit in search_hits:
+            rendered = _context_hit(
+                hit,
+                node=nodes[hit.node_id],
+                tokens=tokens,
+                snippet_lines=snippet_lines,
+                snippet_characters=snippet_characters,
+                fallback_to_title=fallback_to_title,
+                output_fields=output_fields,
+            )
+            cost = _hit_cost(rendered)
+            if used + cost > max_characters:
+                truncated = True
+                break
+            selected.append(rendered)
+            used += cost
+        if len(selected) < len(search_hits):
+            truncated = True
+
     return ContextResult(
         hits=tuple(selected),
+        groups=tuple(selected_groups),
         max_characters=max_characters,
         used_characters=used,
         truncated=truncated,
