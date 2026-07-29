@@ -80,6 +80,13 @@ def load_manifest(root: Path) -> VaultManifest:
                 f"search.zones.{index}: field is only valid for property source"
             )
 
+    for index, boost in enumerate(data.get("search", {}).get("boosts", ())):
+        kind = boost.get("kind")
+        if kind is not None and kind not in node_kinds:
+            raise ManifestError(
+                f"search.boosts.{index}: kind {kind!r} is not defined in nodeKinds"
+            )
+
     limit_defaults = {
         "search": (20, 100),
         "context": (8, 20),

@@ -96,7 +96,11 @@ def test_link_extraction_ignores_code_and_comments() -> None:
 
 
 def test_tags_are_normalized_without_duplicates() -> None:
-    assert normalize_tags(["#guide", "guide", " planning "]) == (
+    assert normalize_tags(
+        ["#guide", "guide", " planning "],
+        "Use #routing and keep #guide.",
+    ) == (
         "guide",
         "planning",
+        "routing",
     )
