@@ -154,10 +154,11 @@ Context may also group ranked notes without changing search scoring:
 ```
 
 The first non-empty configured field becomes the group key. The built-in
-`ticket` path token recognizes conventional ticket IDs case-insensitively,
-stops before a descriptive suffix, and also recognizes `adhoc-YYYY-MM-DD-*`
-IDs. `keyCase` optionally normalizes both explicit and path-derived keys; notes
-without either key source fall back to their own path.
+`ticket` path token recognizes conventional ticket IDs with at least two
+digits case-insensitively, stops before a descriptive suffix, and also
+recognizes `adhoc-YYYY-MM-DD-*` IDs. `keyCase` optionally normalizes both
+explicit and path-derived keys; notes without either key source fall back to
+their own path.
 Groups rank by their best search hit. Within a group, non-inactive notes come
 first, followed by the freshest ISO date, score, and path. The response keeps
 both the freshness-selected `representative` and a distinct relevance-selected

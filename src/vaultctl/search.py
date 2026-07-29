@@ -14,7 +14,7 @@ from vaultctl.model import ContextGroup, ContextResult, Node, ScanResult, Search
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 TICKET_RE = re.compile(
     r"\b(adhoc-\d{4}-\d{2}-\d{2}-[A-Za-z0-9._-]+|"
-    r"[A-Za-z]{2,}-\d+)\b"
+    r"[A-Za-z]{2,}-\d{2,})\b"
 )
 DEFAULT_STOP_WORDS = frozenset(
     {

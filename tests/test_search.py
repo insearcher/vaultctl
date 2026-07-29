@@ -217,7 +217,7 @@ def test_context_groups_by_fields_ticket_paths_and_freshness(make_vault) -> None
                 "# History\n\n"
                 "query query query query query query\n"
             ),
-            "notes/abc-2-follow-up.md": (
+            "notes/abc-22-follow-up.md": (
                 "---\n"
                 "status: active\n"
                 "updated: 2026-02-01\n"
@@ -245,7 +245,7 @@ def test_context_groups_by_fields_ticket_paths_and_freshness(make_vault) -> None
 
     assert [group.key for group in selected.groups] == [
         "ABC-1",
-        "ABC-2",
+        "ABC-22",
         "notes/misc.md",
     ]
     first = selected.groups[0]
@@ -260,3 +260,41 @@ def test_context_groups_by_fields_ticket_paths_and_freshness(make_vault) -> None
     assert selected.hits == tuple(
         hit for group in selected.groups for hit in group.hits
     )
+
+
+def test_context_keeps_single_digit_ticket_paths_in_separate_groups(
+    make_vault,
+) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "zones": [
+                    {
+                        "source": "body",
+                        "weight": 1,
+                        "countCap": 1,
+                    }
+                ]
+            },
+            "context": {
+                "fallbackToTitle": False,
+                "grouping": {
+                    "pathToken": "ticket",
+                    "keyCase": "upper",
+                },
+            },
+        },
+        notes={
+            "notes/abc-1-one.md": "# One\n\nquery\n",
+            "notes/abc-1-two.md": "# Two\n\nquery\n",
+        },
+    )
+    result = scan_vault(root)
+
+    selected = context(result, "query")
+
+    assert [group.key for group in selected.groups] == [
+        "notes/abc-1-one.md",
+        "notes/abc-1-two.md",
+    ]
+    assert [group.count for group in selected.groups] == [1, 1]
