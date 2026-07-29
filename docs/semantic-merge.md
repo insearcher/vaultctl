@@ -1,8 +1,8 @@
 # Semantic merge
 
 `vaultctl merge plan` is the Phase 0 read-only, deterministic three-way
-planner for one Markdown path. It is the contract spike before any Git merge
-driver or public write support.
+planner for one Markdown path. It gives an agent or human structured evidence
+before they choose an edit or a future explicit apply operation.
 
 ## Command
 
@@ -79,7 +79,10 @@ The public merge CLI does not:
 - run `git merge` or install a custom merge driver;
 - connect to GitHub, Bitbucket, GitLab, or Forgejo;
 - execute repository-provided code;
-- invoke an LLM to resolve conflicts.
+- invoke an LLM to resolve conflicts;
+- decide how an agent should edit, approve, retry, commit, or push.
+
+See [agent workflows](agent-workflows.md) for the intended composition model.
 
 ## Corpus gate
 
