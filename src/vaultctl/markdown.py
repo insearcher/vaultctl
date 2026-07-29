@@ -23,6 +23,7 @@ FENCED_CODE_RE = re.compile(
 )
 INLINE_CODE_RE = re.compile(r"`+[^`\n]*`+")
 HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+BODY_TAG_RE = re.compile(r"(?<!\w)#([A-Za-z0-9_/-]+)")
 TOP_LEVEL_SCALAR_RE = re.compile(
     r"^(?P<key>[A-Za-z_][A-Za-z0-9_-]*):(?P<spacing>[ \t]*)(?P<value>.*)$"
 )
@@ -162,15 +163,16 @@ def extract_body_links(body: str) -> tuple[tuple[str, str], ...]:
     return tuple(links)
 
 
-def normalize_tags(value: Any) -> tuple[str, ...]:
+def normalize_tags(value: Any, body: str = "") -> tuple[str, ...]:
     if value is None:
-        return ()
-    if isinstance(value, str):
+        candidates = []
+    elif isinstance(value, str):
         candidates = [value]
     elif isinstance(value, list):
         candidates = [item for item in value if isinstance(item, str)]
     else:
-        return ()
+        candidates = []
+    candidates.extend(BODY_TAG_RE.findall(body))
 
     normalized = []
     for tag in candidates:

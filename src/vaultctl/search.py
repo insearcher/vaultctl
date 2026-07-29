@@ -98,6 +98,10 @@ def _zone_text(node: Node, zone: dict[str, Any]) -> str:
     source = zone["source"]
     if source == "title":
         return node.title
+    if source == "firstHeading":
+        if node.headings:
+            return node.headings[0]
+        return PurePosixPath(node.path).stem.replace("-", " ").replace("_", " ")
     if source == "stem":
         return PurePosixPath(node.path).stem
     if source == "path":
@@ -116,14 +120,24 @@ def _zone_text(node: Node, zone: dict[str, Any]) -> str:
     return node.body
 
 
+def _boost_matches(node: Node, boost: dict[str, Any]) -> bool:
+    kind = boost.get("kind")
+    if kind is not None:
+        return node.kind == kind
+    return PurePosixPath(node.path).match(boost["path"])
+
+
 def _resolved_zones(result: ScanResult) -> tuple[dict[str, Any], ...]:
     configured = _search_config(result).get("zones")
     return tuple(configured) if configured else DEFAULT_ZONES
 
 
 def _stop_words(result: ScanResult) -> frozenset[str]:
-    configured = _search_config(result).get("stopWords", ())
-    return DEFAULT_STOP_WORDS | frozenset(word.lower() for word in configured)
+    config = _search_config(result)
+    defaults = (
+        DEFAULT_STOP_WORDS if config.get("useDefaultStopWords", True) else frozenset()
+    )
+    return defaults | frozenset(word.lower() for word in config.get("stopWords", ()))
 
 
 def _resolve_limit(
@@ -151,6 +165,7 @@ def _score_node(
     phrase: str,
     tokens: tuple[str, ...],
     zones: tuple[dict[str, Any], ...],
+    boosts: tuple[dict[str, Any], ...],
 ) -> SearchHit | None:
     score = 0
     matched = []
@@ -167,6 +182,7 @@ def _score_node(
             matched.append(_zone_name(zone))
     if score == 0:
         return None
+    score += sum(boost["weight"] for boost in boosts if _boost_matches(node, boost))
     return SearchHit(
         node_id=node.id,
         path=node.path,
@@ -189,6 +205,7 @@ def _rank(result: ScanResult, query: str) -> tuple[SearchHit, ...]:
                 phrase=phrase,
                 tokens=tokens,
                 zones=_resolved_zones(result),
+                boosts=tuple(_search_config(result).get("boosts", ())),
             )
         )
         is not None

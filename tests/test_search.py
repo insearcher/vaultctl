@@ -79,6 +79,130 @@ def test_search_uses_manifest_zones_and_stable_ranking(make_vault) -> None:
     assert hits[1].matched_zones == ("property:description", "body")
 
 
+def test_search_supports_first_heading_and_inline_tag_zones(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "zones": [
+                    {
+                        "source": "firstHeading",
+                        "weight": 9,
+                        "phraseWeight": 25,
+                    },
+                    {
+                        "source": "tags",
+                        "weight": 7,
+                    },
+                ]
+            }
+        },
+        notes={
+            "notes/guide.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "## Route plan\n\n"
+                "Use #routing for this guide.\n"
+            ),
+        },
+    )
+    result = scan_vault(root)
+
+    heading_hit = search(result, "route plan")[0]
+    tag_hit = search(result, "routing")[0]
+
+    assert heading_hit.score == 43
+    assert heading_hit.matched_zones == ("firstHeading",)
+    assert tag_hit.score == 7
+    assert tag_hit.matched_zones == ("tags",)
+    assert result.nodes[0].tags == ("routing",)
+
+
+def test_first_heading_zone_humanizes_filename_fallback(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "zones": [
+                    {
+                        "source": "firstHeading",
+                        "weight": 9,
+                        "phraseWeight": 25,
+                    }
+                ]
+            }
+        },
+        notes={
+            "notes/route-plan.md": (
+                "---\ntags: []\nrelated: []\n---\nNo headings here.\n"
+            ),
+        },
+    )
+    result = scan_vault(root)
+
+    hit = search(result, "route plan")[0]
+
+    assert hit.score == 43
+    assert hit.matched_zones == ("firstHeading",)
+
+
+def test_search_applies_kind_and_path_boosts_only_to_matches(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "zones": [
+                    {
+                        "source": "body",
+                        "weight": 1,
+                    }
+                ],
+                "boosts": [
+                    {
+                        "kind": "document",
+                        "weight": 3,
+                    },
+                    {
+                        "path": "notes/guide.md",
+                        "weight": 5,
+                    },
+                ],
+            }
+        },
+        notes={
+            "notes/guide.md": ("---\ntags: []\nrelated: []\n---\n# Guide\n\nrouting\n"),
+            "notes/unrelated.md": ("---\ntags: []\nrelated: []\n---\n# Unrelated\n"),
+        },
+    )
+    result = scan_vault(root)
+
+    hits = search(result, "routing")
+
+    assert [(hit.path, hit.score) for hit in hits] == [("notes/guide.md", 9)]
+
+
+def test_search_can_replace_default_stop_words(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "useDefaultStopWords": False,
+                "stopWords": ["custom"],
+                "zones": [
+                    {
+                        "source": "body",
+                        "weight": 1,
+                    }
+                ],
+            }
+        },
+        notes={
+            "notes/guide.md": (
+                "---\ntags: []\nrelated: []\n---\n# Guide\n\nwhen custom\n"
+            ),
+        },
+    )
+    result = scan_vault(root)
+
+    assert [hit.path for hit in search(result, "when")] == ["notes/guide.md"]
+    assert search(result, "custom") == ()
+
+
 def test_search_limit_is_bounded_by_manifest(make_vault) -> None:
     result = scan_vault(_search_vault(make_vault))
 

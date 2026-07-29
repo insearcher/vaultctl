@@ -271,6 +271,31 @@ def test_property_search_zone_requires_a_field(make_vault) -> None:
     assert "property source requires field" in message
 
 
+def test_search_boost_rejects_unknown_kind(make_vault) -> None:
+    root = make_vault(
+        manifest_overrides={
+            "search": {
+                "boosts": [
+                    {
+                        "kind": "missing",
+                        "weight": 5,
+                    }
+                ]
+            }
+        }
+    )
+
+    try:
+        load_manifest(root)
+    except Exception as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("search boost unexpectedly accepted an unknown kind")
+
+    assert "search.boosts.0" in message
+    assert "missing" in message
+
+
 def test_manifest_limit_defaults_cannot_exceed_maximum(make_vault) -> None:
     root = make_vault(
         manifest_overrides={

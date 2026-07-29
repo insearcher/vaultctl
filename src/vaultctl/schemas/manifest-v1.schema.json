@@ -108,6 +108,7 @@
         "source": {
           "enum": [
             "title",
+            "firstHeading",
             "stem",
             "path",
             "tags",
@@ -140,6 +141,40 @@
         }
       }
     },
+    "searchBoost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "weight"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "required": [
+            "path"
+          ]
+        }
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "weight": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        }
+      }
+    },
     "search": {
       "type": "object",
       "additionalProperties": false,
@@ -151,6 +186,12 @@
             "$ref": "#/$defs/searchZone"
           }
         },
+        "boosts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/searchBoost"
+          }
+        },
         "stopWords": {
           "type": "array",
           "items": {
@@ -158,6 +199,10 @@
             "minLength": 1
           },
           "uniqueItems": true
+        },
+        "useDefaultStopWords": {
+          "type": "boolean",
+          "default": true
         },
         "defaultLimit": {
           "type": "integer",

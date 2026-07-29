@@ -407,7 +407,7 @@ def scan_vault(root: Path) -> ScanResult:
             )
             continue
 
-        tags = normalize_tags(parsed.properties.get("tags"))
+        tags = normalize_tags(parsed.properties.get("tags"), parsed.body)
         kind, classification_issues = _classify(
             manifest,
             path=relative,

@@ -126,8 +126,40 @@ adds `phraseWeight` for the complete query phrase.
 }
 ```
 
-Available zone sources are `title`, `stem`, `path`, `tags`, `property`,
-`properties`, `headings`, and `body`. Only `property` takes a `field`.
+Available zone sources are `title`, `firstHeading`, `stem`, `path`, `tags`,
+`property`, `properties`, `headings`, and `body`. `firstHeading` uses the first
+Markdown heading regardless of level and falls back to a humanized filename
+stem where hyphens and underscores become spaces.
+`tags` includes both frontmatter tags and inline Markdown tags. Only
+`property` takes a `field`.
+
+The built-in stop-word set is enabled by default. Set
+`"useDefaultStopWords": false` when a vault must replace it completely with
+its own `stopWords` list; otherwise configured words extend the defaults.
+
+Search policy may add a fixed boost after a node has matched at least one
+query zone. Each boost selects either one manifest node kind or one
+vault-relative path glob:
+
+```json
+{
+  "search": {
+    "boosts": [
+      {
+        "kind": "guide",
+        "weight": 4
+      },
+      {
+        "path": "notes/**/README.md",
+        "weight": 5
+      }
+    ]
+  }
+}
+```
+
+Boosts never create a hit by themselves. They only refine deterministic
+ordering among nodes that already match the query.
 
 When no search configuration is present, `vaultctl` uses a stable built-in
 general-purpose scorer. Context reuses the search ranking and adds matching
