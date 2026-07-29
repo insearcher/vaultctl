@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/insearcher/vaultctl/main/src/vaultctl/schemas/merge-validation-v1.schema.json",
+  "title": "vaultctl prospective merge validation v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "vaultId",
+    "planId",
+    "path",
+    "valid",
+    "candidateSourceHash",
+    "vaultDigest",
+    "summary",
+    "issues"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vaultctl.merge-validation/v1"
+    },
+    "vaultId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "planId": {
+      "$ref": "#/$defs/digest"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.md$"
+    },
+    "valid": {
+      "type": "boolean"
+    },
+    "candidateSourceHash": {
+      "$ref": "#/$defs/sourceHash"
+    },
+    "vaultDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodes",
+        "edges",
+        "errors",
+        "warnings"
+      ],
+      "properties": {
+        "nodes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "edges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warnings": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "valid": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "summary": {
+            "properties": {
+              "errors": {
+                "const": 0
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "summary": {
+            "properties": {
+              "errors": {
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sourceHash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "level",
+        "code",
+        "message"
+      ],
+      "properties": {
+        "level": {
+          "enum": [
+            "error",
+            "warning"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -121,6 +121,18 @@ def test_merge_plan_fails_closed_on_concurrent_scalar_change() -> None:
     assert plan.conflicts[0].location == "frontmatter.status"
 
 
+def test_merge_plan_distinguishes_boolean_from_integer() -> None:
+    plan = _plan(
+        base=_document({"status": "draft"}),
+        ours=_document({"status": True}),
+        theirs=_document({"status": 1}),
+    )
+
+    assert plan.state == "conflict"
+    assert plan.candidate is None
+    assert plan.conflicts[0].kind == "frontmatter.concurrent-change"
+
+
 def test_set_strategy_merges_independent_additions_symmetrically() -> None:
     manifest = _manifest(fields={"tags": "set"})
     base = _document({"tags": ["shared"]})
@@ -193,7 +205,7 @@ def test_receipt_contract_matches_schema() -> None:
     receipt = Receipt(
         schema_version="vaultctl.receipt/v1",
         vault_id="synthetic-vault",
-        operation_id="operation-1",
+        operation_id=digest,
         paths=("notes/example.md",),
         before_hashes={"notes/example.md": "1" * 64},
         after_hashes={"notes/example.md": "2" * 64},
@@ -207,6 +219,7 @@ def test_receipt_contract_matches_schema() -> None:
         },
         manifest_digest=digest,
         engine_version="0.1.0a1",
+        validation_digest=digest,
     )
 
     schema = _schema("receipt-v1.schema.json")

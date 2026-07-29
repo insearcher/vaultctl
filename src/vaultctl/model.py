@@ -257,6 +257,32 @@ class MergePlan:
 
 
 @dataclass(frozen=True)
+class ProspectiveValidation:
+    schema_version: str
+    vault_id: str
+    plan_id: str
+    path: str
+    valid: bool
+    candidate_source_hash: str
+    vault_digest: str
+    summary: dict[str, int]
+    issues: tuple[ValidationIssue, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schemaVersion": self.schema_version,
+            "vaultId": self.vault_id,
+            "planId": self.plan_id,
+            "path": self.path,
+            "valid": self.valid,
+            "candidateSourceHash": self.candidate_source_hash,
+            "vaultDigest": self.vault_digest,
+            "summary": self.summary,
+            "issues": [issue.to_dict() for issue in self.issues],
+        }
+
+
+@dataclass(frozen=True)
 class MutationPlan:
     """Versioned future write contract; no apply behavior exists yet."""
 
@@ -269,7 +295,7 @@ class MutationPlan:
 
 @dataclass(frozen=True)
 class Receipt:
-    """Versioned future mutation receipt; no write behavior exists yet."""
+    """Versioned evidence from the internal transaction boundary."""
 
     schema_version: str
     vault_id: str
@@ -283,9 +309,11 @@ class Receipt:
     input_revisions: dict[str, str]
     manifest_digest: str
     engine_version: str
+    validation_digest: str
+    error: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "schemaVersion": self.schema_version,
             "vaultId": self.vault_id,
             "operationId": self.operation_id,
@@ -298,4 +326,8 @@ class Receipt:
             "inputRevisions": self.input_revisions,
             "manifestDigest": self.manifest_digest,
             "engineVersion": self.engine_version,
+            "validationDigest": self.validation_digest,
         }
+        if self.error is not None:
+            data["error"] = self.error
+        return data

@@ -3,8 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from importlib.resources import files
 from pathlib import Path, PurePosixPath
 from typing import Any
+
+from jsonschema import Draft202012Validator
 
 from vaultctl import __version__
 from vaultctl.errors import MergeError
@@ -35,6 +38,12 @@ def _canonical_json(value: Any) -> str:
 def _digest(value: Any) -> str:
     encoded = _canonical_json(value).encode("utf-8")
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def _values_equal(left: Any, right: Any) -> bool:
+    if left is _MISSING or right is _MISSING:
+        return left is right
+    return _canonical_json(left) == _canonical_json(right)
 
 
 def _value_snapshot(value: Any) -> dict[str, Any]:
@@ -137,14 +146,14 @@ def _resolve_value(
         for value in (base, ours, theirs)
     ):
         return None
-    if ours == theirs:
-        resolution = "unchanged" if ours == base else "same-change"
+    if _values_equal(ours, theirs):
+        resolution = "unchanged" if _values_equal(ours, base) else "same-change"
         candidate = _normalize_set_value(ours) if strategy == "set" else ours
         return candidate, resolution
-    if ours == base:
+    if _values_equal(ours, base):
         candidate = _normalize_set_value(theirs) if strategy == "set" else theirs
         return candidate, "theirs"
-    if theirs == base:
+    if _values_equal(theirs, base):
         candidate = _normalize_set_value(ours) if strategy == "set" else ours
         return candidate, "ours"
     if strategy == "set":
@@ -189,6 +198,102 @@ def _candidate_hash(properties: dict[str, Any], body: str) -> str:
     return _digest({"properties": properties, "body": body})
 
 
+def manifest_digest(manifest: VaultManifest) -> str:
+    return _digest(manifest.raw)
+
+
+def merge_plan_digest(plan: MergePlan) -> str:
+    return _digest(plan.to_dict())
+
+
+def merge_plan_from_dict(payload: dict[str, Any]) -> MergePlan:
+    schema_path = files("vaultctl").joinpath("schemas/merge-plan-v1.schema.json")
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    validator = Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.path))
+    if errors:
+        messages = []
+        for error in errors:
+            location = ".".join(str(item) for item in error.path) or "<root>"
+            messages.append(f"{location}: {error.message}")
+        raise MergeError("invalid merge plan:\n- " + "\n- ".join(messages))
+
+    plan_core = dict(payload)
+    plan_id = plan_core.pop("planId")
+    if _digest(plan_core) != plan_id:
+        raise MergeError("merge plan digest does not match planId")
+
+    candidate_payload = payload["candidate"]
+    candidate = None
+    if candidate_payload is not None:
+        expected_hash = _candidate_hash(
+            candidate_payload["properties"],
+            candidate_payload["body"],
+        )
+        if expected_hash != candidate_payload["contentHash"]:
+            raise MergeError("merge candidate digest does not match contentHash")
+        candidate = MergeCandidate(
+            properties=candidate_payload["properties"],
+            body=candidate_payload["body"],
+            content_hash=candidate_payload["contentHash"],
+        )
+
+    return MergePlan(
+        schema_version=payload["schemaVersion"],
+        plan_id=plan_id,
+        vault_id=payload["vaultId"],
+        path=payload["path"],
+        engine_version=payload["engineVersion"],
+        manifest_digest=payload["manifestDigest"],
+        inputs={
+            name: MergeInput(
+                revision=value["revision"],
+                source_hash=value["sourceHash"],
+            )
+            for name, value in payload["inputs"].items()
+        },
+        state=payload["state"],
+        decisions=tuple(
+            MergeDecision(
+                location=value["location"],
+                strategy=value["strategy"],
+                resolution=value["resolution"],
+                candidate=value["candidate"],
+            )
+            for value in payload["decisions"]
+        ),
+        conflicts=tuple(
+            Conflict(
+                id=value["id"],
+                kind=value["kind"],
+                path=value["path"],
+                location=value["location"],
+                strategy=value["strategy"],
+                message=value["message"],
+                base=value["base"],
+                ours=value["ours"],
+                theirs=value["theirs"],
+            )
+            for value in payload["conflicts"]
+        ),
+        candidate=candidate,
+    )
+
+
+def load_merge_plan(path: Path) -> MergePlan:
+    try:
+        payload = json.loads(path.expanduser().read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise MergeError(f"cannot read merge plan: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise MergeError(
+            f"invalid merge plan JSON at line {exc.lineno}, column {exc.colno}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise MergeError("merge plan must be a JSON object")
+    return merge_plan_from_dict(payload)
+
+
 def plan_merge(
     manifest: VaultManifest,
     *,
@@ -206,7 +311,7 @@ def plan_merge(
         "ours": _validate_revision("ours", ours_revision),
         "theirs": _validate_revision("theirs", theirs_revision),
     }
-    manifest_digest = _digest(manifest.raw)
+    current_manifest_digest = manifest_digest(manifest)
     decisions: list[MergeDecision] = []
     conflicts: list[Conflict] = []
     candidate_properties: dict[str, Any] = {}
@@ -321,7 +426,7 @@ def plan_merge(
         "vaultId": manifest.vault_id,
         "path": logical_path,
         "engineVersion": __version__,
-        "manifestDigest": manifest_digest,
+        "manifestDigest": current_manifest_digest,
         "inputs": {
             name: merge_input.to_dict() for name, merge_input in sorted(inputs.items())
         },
@@ -336,7 +441,7 @@ def plan_merge(
         vault_id=manifest.vault_id,
         path=logical_path,
         engine_version=__version__,
-        manifest_digest=manifest_digest,
+        manifest_digest=current_manifest_digest,
         inputs=inputs,
         state=state,
         decisions=tuple(decisions),

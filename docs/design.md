@@ -56,9 +56,9 @@ remain owned by `vaultctl`.
 
 ## Write boundary
 
-Write support is intentionally absent from the first release. Semantic merge
-starts with a read-only planning stage; it does not update a working tree,
-index, branch, or remote.
+The public CLI remains read-only. Semantic merge starts with planning and
+whole-vault prospective validation; neither updates a working tree, index,
+branch, or remote.
 
 A future write must have two explicit stages:
 
@@ -88,6 +88,8 @@ Unknown and concurrent scalar changes fail closed. A manifest may declare a
 field as a mathematical set; only that strategy can combine independent list
 changes. Concurrent body changes always remain conflicts in v1.
 
-The plan, conflict, and future receipt formats are independently versioned.
-Only a later milestone may consume a clean candidate, after prospective
-vault validation, rollback, and receipt behavior exist.
+The plan, conflict, validation, and receipt formats are independently versioned.
+An internal synthetic-only transaction boundary now proves one-path hash
+preconditions, prospective validation, atomic replace, rollback, and receipts.
+It is not exposed as a CLI command. Git driver and real-vault rollout remain
+later, separately gated milestones.

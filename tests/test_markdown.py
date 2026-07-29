@@ -3,7 +3,12 @@ from __future__ import annotations
 import pytest
 
 from vaultctl.errors import MarkdownError
-from vaultctl.markdown import extract_body_links, normalize_tags, parse_markdown
+from vaultctl.markdown import (
+    extract_body_links,
+    normalize_tags,
+    parse_markdown,
+    render_markdown_candidate,
+)
 
 
 def test_frontmatter_parses_block_lists_and_dates(tmp_path) -> None:
@@ -104,3 +109,44 @@ def test_tags_are_normalized_without_duplicates() -> None:
         "planning",
         "routing",
     )
+
+
+def test_candidate_renderer_preserves_semantic_noop_bytes() -> None:
+    current = b'---\ntitle: "Quoted" # keep\ntags: [example]\n...\n# Example\n'
+
+    rendered = render_markdown_candidate(
+        current,
+        properties={"title": "Quoted", "tags": ["example"]},
+        body="# Example\n",
+        display_path="notes/example.md",
+    )
+
+    assert rendered == current
+
+
+def test_candidate_renderer_changes_only_body_when_properties_match() -> None:
+    current = b'---\ntitle: "Quoted" # keep\ntags: [example]\n...\n# Example\n'
+
+    rendered = render_markdown_candidate(
+        current,
+        properties={"title": "Quoted", "tags": ["example"]},
+        body="# Updated\n",
+        display_path="notes/example.md",
+    )
+
+    assert rendered == (
+        b'---\ntitle: "Quoted" # keep\ntags: [example]\n...\n# Updated\n'
+    )
+
+
+def test_candidate_renderer_distinguishes_boolean_from_integer() -> None:
+    current = b"---\nvalue: 1\n---\n# Example\n"
+
+    rendered = render_markdown_candidate(
+        current,
+        properties={"value": True},
+        body="# Example\n",
+        display_path="notes/example.md",
+    )
+
+    assert rendered == b"---\nvalue: true\n---\n# Example\n"

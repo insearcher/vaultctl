@@ -13,7 +13,8 @@ Current schemas:
 | `search` | `vaultctl.search/v1` |
 | `context` | `vaultctl.context/v1` |
 | `merge plan` | `vaultctl.merge-plan/v1` |
-| future mutation receipt | `vaultctl.receipt/v1` |
+| `merge validate` | `vaultctl.merge-validation/v1` |
+| internal mutation receipt | `vaultctl.receipt/v1` |
 
 Consumers must check `schemaVersion` instead of inferring compatibility from
 the CLI version.
@@ -46,8 +47,14 @@ A `vaultctl.merge-plan/v1` payload binds the result to:
   state is `clean`.
 
 Conflict plans always have `candidate: null`. A clean plan is still not
-authorization to write; no current command consumes it.
+authorization to write; the current CLI consumes it only for read-only
+prospective validation.
 
-`vaultctl.receipt/v1` is the reserved apply/rollback evidence contract. Its
-schema exists so future write work cannot invent an unversioned result, but
-the read-only release does not emit receipts.
+`vaultctl.merge-validation/v1` binds a rendered candidate source hash and
+whole-vault digest to the plan. It is read-only and contains the prospective
+validation issues and summary.
+
+`vaultctl.receipt/v1` is emitted only by the internal synthetic transaction
+boundary. It binds the plan and validation digests, exact revisions, manifest,
+engine, before/final hashes, and applied/failed/rolled-back state. There is no
+public apply command.

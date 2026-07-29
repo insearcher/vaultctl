@@ -12,10 +12,11 @@ from vaultctl import __version__
 from vaultctl.engine import scan_vault
 from vaultctl.errors import VaultctlError
 from vaultctl.manifest import load_manifest, resolve_vault_root
-from vaultctl.merge import plan_merge_files
+from vaultctl.merge import load_merge_plan, plan_merge_files
 from vaultctl.model import ContextResult, ScanResult, SearchHit
 from vaultctl.search import context as build_context
 from vaultctl.search import search as search_nodes
+from vaultctl.transaction import validate_merge_plan
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -69,6 +70,11 @@ def _parser() -> argparse.ArgumentParser:
     merge_plan.add_argument("--base-revision", required=True)
     merge_plan.add_argument("--ours-revision", required=True)
     merge_plan.add_argument("--theirs-revision", required=True)
+    merge_validate = merge_commands.add_parser(
+        "validate",
+        help="Validate a clean merge plan against the prospective whole vault.",
+    )
+    merge_validate.add_argument("--plan", type=Path, required=True)
     return parser
 
 
@@ -250,6 +256,13 @@ def _render_text(payload: dict[str, Any]) -> str:
             for conflict in payload["conflicts"]
         )
         return "\n".join(lines)
+    if schema == "vaultctl.merge-validation/v1":
+        summary = payload["summary"]
+        status = "ok" if payload["valid"] else "failed"
+        return (
+            f"prospective merge validation {status}: {payload['path']} "
+            f"({summary['errors']} error(s), {summary['warnings']} warning(s))"
+        )
     return (
         f"scan: {len(payload['nodes'])} node(s), "
         f"{len(payload['edges'])} edge(s), "
@@ -274,18 +287,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if args.command == "merge":
             manifest = load_manifest(root)
-            plan = plan_merge_files(
-                manifest,
-                path=args.path,
-                base_path=args.base,
-                ours_path=args.ours,
-                theirs_path=args.theirs,
-                base_revision=args.base_revision,
-                ours_revision=args.ours_revision,
-                theirs_revision=args.theirs_revision,
-            )
-            _emit(plan.to_dict(), args.format)
-            return 0 if plan.state == "clean" else 1
+            if args.merge_command == "plan":
+                plan = plan_merge_files(
+                    manifest,
+                    path=args.path,
+                    base_path=args.base,
+                    ours_path=args.ours,
+                    theirs_path=args.theirs,
+                    base_revision=args.base_revision,
+                    ours_revision=args.ours_revision,
+                    theirs_revision=args.theirs_revision,
+                )
+                _emit(plan.to_dict(), args.format)
+                return 0 if plan.state == "clean" else 1
+            plan = load_merge_plan(args.plan)
+            validation = validate_merge_plan(manifest, plan)
+            _emit(validation.to_dict(), args.format)
+            return 0 if validation.valid else 1
 
         result = scan_vault(root)
         if args.command == "scan":
