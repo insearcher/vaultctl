@@ -10,6 +10,10 @@ The public CLI remains read-only. This milestone adds:
 
 There is no public `merge apply` command yet.
 
+The internal apply function is a safety proof for future explicit,
+agent-callable write primitives. It is not an autonomous writer or Git
+workflow.
+
 ## Prospective validation
 
 `merge validate` accepts a versioned clean merge plan. Before scanning, it

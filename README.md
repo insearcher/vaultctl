@@ -4,6 +4,10 @@
 Notes remain ordinary Markdown files; a declarative manifest describes node
 kinds, fields, tags, and typed relations.
 
+It is designed as a deterministic toolbox for agents and humans, not as an
+autonomous workflow orchestrator. The caller owns Git, editing, approval, and
+retry decisions; `vaultctl` supplies structured evidence and validation.
+
 > **Status:** pre-alpha. The public CLI is read-only: it can scan, validate,
 > export a graph, search, assemble bounded context, produce semantic merge
 > plans, and validate a candidate against the prospective whole vault. It does
@@ -81,6 +85,10 @@ All machine-readable output includes a schema version. See
 triple, records exact revisions and content hashes, applies only declarative
 manifest policy, and returns either a candidate or typed conflicts. See
 [the semantic merge contract](docs/semantic-merge.md).
+
+See [agent workflows](docs/agent-workflows.md) for the intended boundary
+between Git, an agent or human operator, optional editor/application tools,
+and `vaultctl`.
 
 The internal one-path transaction boundary is not a supported CLI surface and
 is tested only on synthetic vaults. See
