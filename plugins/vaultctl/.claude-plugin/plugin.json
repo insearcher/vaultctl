@@ -1,0 +1,20 @@
+{
+  "name": "vaultctl",
+  "version": "0.1.0",
+  "description": "Portable agent workflows for safe, schema-driven Markdown vault operations with vaultctl.",
+  "author": {
+    "name": "insearcher",
+    "url": "https://github.com/insearcher"
+  },
+  "homepage": "https://github.com/insearcher/vaultctl",
+  "repository": "https://github.com/insearcher/vaultctl",
+  "license": "MIT",
+  "keywords": [
+    "vaultctl",
+    "markdown",
+    "obsidian",
+    "knowledge-graph",
+    "agent-workflow"
+  ],
+  "skills": "./skills/"
+}
