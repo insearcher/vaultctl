@@ -1,0 +1,37 @@
+{
+  "name": "vaultctl",
+  "version": "0.1.0",
+  "description": "Portable agent workflows for safe, schema-driven Markdown vault operations with vaultctl.",
+  "author": {
+    "name": "insearcher",
+    "url": "https://github.com/insearcher"
+  },
+  "homepage": "https://github.com/insearcher/vaultctl",
+  "repository": "https://github.com/insearcher/vaultctl",
+  "license": "MIT",
+  "keywords": [
+    "vaultctl",
+    "markdown",
+    "obsidian",
+    "knowledge-graph",
+    "agent-workflow"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Vaultctl",
+    "shortDescription": "Safe agent workflows for Markdown vaults.",
+    "longDescription": "Agent-facing workflows for vaultctl reads, one-node mutation plans and receipts, validation, drift handling, semantic merge evidence, and path-scoped Git handoff. Vault selection and authority remain consumer-owned.",
+    "developerName": "insearcher",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/insearcher/vaultctl",
+    "defaultPrompt": [
+      "Use vaultctl to inspect this Markdown vault safely.",
+      "Plan and validate a one-note vault change before applying it.",
+      "Resolve this Markdown conflict with vaultctl evidence and Git."
+    ]
+  }
+}

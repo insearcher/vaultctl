@@ -1,0 +1,20 @@
+{
+  "name": "insearcher",
+  "interface": {
+    "displayName": "Insearcher"
+  },
+  "plugins": [
+    {
+      "name": "vaultctl",
+      "source": {
+        "source": "local",
+        "path": "./plugins/vaultctl"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

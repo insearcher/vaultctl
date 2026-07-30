@@ -1,0 +1,17 @@
+{
+  "name": "insearcher",
+  "owner": {
+    "name": "insearcher",
+    "url": "https://github.com/insearcher"
+  },
+  "metadata": {
+    "description": "Public agent tooling from insearcher."
+  },
+  "plugins": [
+    {
+      "name": "vaultctl",
+      "source": "./plugins/vaultctl",
+      "description": "Portable agent workflows for safe, schema-driven Markdown vault operations with vaultctl."
+    }
+  ]
+}

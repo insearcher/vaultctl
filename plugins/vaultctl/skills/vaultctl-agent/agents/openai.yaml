@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vaultctl Agent Workflow"
+  short_description: "Safe agent workflows for Markdown vaults"
+  default_prompt: "Use $vaultctl-agent to plan and validate this vault operation safely."

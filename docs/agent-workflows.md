@@ -16,6 +16,12 @@ The agent skill or prompt owns the sequence and domain policy. Consumer
 repositories may provide different instructions while using the same
 `vaultctl` contracts and manifest model.
 
+The repository publishes the generic sequence as
+`$vaultctl:vaultctl-agent` in the `insearcher` plugin marketplace. It is a
+reusable prompt/skill layer, not part of the deterministic Python engine.
+Consumer plugins compose it with their own vault resolution, executable pin,
+authority, validation, and publication policy.
+
 ## Create/update loop
 
 For one Markdown node, the caller:

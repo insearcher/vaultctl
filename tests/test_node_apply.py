@@ -105,7 +105,8 @@ def test_apply_create_is_atomic_path_scoped_and_versioned(make_vault) -> None:
         "sourceHash": plan.candidate.source_hash,
     }
     assert target.read_text(encoding="utf-8") == plan.candidate.source
-    assert stat.S_IMODE(target.stat().st_mode) == 0o644
+    expected_mode = stat.S_IMODE(target.parent.stat().st_mode) & 0o666 or 0o600
+    assert stat.S_IMODE(target.stat().st_mode) == expected_mode
     assert unrelated.read_bytes() == unrelated_before
     assert list(target.parent.glob(".*.vaultctl-*.tmp")) == []
     _validate_schema(

@@ -28,6 +28,37 @@ uv tool install \
   'vaultctl @ git+https://github.com/insearcher/vaultctl.git@<full-commit-sha>'
 ```
 
+## Agent plugin
+
+This repository is also the public `insearcher` marketplace for a cross-runtime
+plugin named `vaultctl`. The plugin contains the generic `vaultctl-agent` skill:
+it teaches an agent how to compose deterministic CLI evidence with an owning
+consumer's vault selection, authority, validation, editor, and Git policy. It
+does not bundle the executable, install dependencies, select a vault, or grant
+write permission.
+
+Codex:
+
+```bash
+codex plugin marketplace add https://github.com/insearcher/vaultctl.git \
+  --ref main \
+  --sparse .agents/plugins \
+  --sparse plugins/vaultctl
+codex plugin add vaultctl@insearcher
+```
+
+Claude Code:
+
+```bash
+claude plugin marketplace add https://github.com/insearcher/vaultctl.git \
+  --scope user \
+  --sparse .claude-plugin plugins/vaultctl
+claude plugin install vaultctl@insearcher --scope user
+```
+
+Consumers should pin and verify the CLI independently, then compose their own
+policy skill with `$vaultctl:vaultctl-agent`.
+
 ## Why
 
 Markdown vaults are easy to edit and review, but every automation tends to
