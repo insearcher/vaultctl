@@ -88,7 +88,8 @@ until it finds `.vaultctl/manifest.json`.
 
 - One Markdown file is one node.
 - Frontmatter contains properties and declared outgoing relations.
-- Wiki links and Markdown links also become graph edges.
+- Wiki links and Markdown links that resolve inside the vault become graph
+  edges. Markdown references that resolve outside the vault remain external.
 - `.vaultctl/manifest.json` defines the schema.
 - Generated indexes are disposable and are not a source of truth.
 

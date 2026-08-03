@@ -145,6 +145,79 @@ def test_unresolved_body_link_is_a_warning(make_vault) -> None:
     assert [issue.code for issue in result.warnings] == ["link.unresolved"]
 
 
+def test_unresolved_internal_markdown_link_is_a_warning(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\nSee [missing](missing.md).\n"
+            )
+        }
+    )
+
+    result = scan_vault(root)
+
+    assert result.errors == ()
+    assert [issue.code for issue in result.warnings] == ["link.unresolved"]
+
+
+def test_internal_parent_relative_markdown_link_resolves(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/deep/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\nSee [target](../target.md).\n"
+            ),
+            "notes/target.md": "---\ntags: []\nrelated: []\n---\n# Target\n",
+        }
+    )
+
+    result = scan_vault(root)
+
+    assert result.issues == ()
+    assert {
+        (edge.source, edge.relation, edge.target, edge.provenance)
+        for edge in result.edges
+    } == {
+        (
+            "notes/deep/example",
+            "link",
+            "notes/target",
+            "markdown-link",
+        )
+    }
+
+
+def test_escaping_markdown_link_is_external(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\nSee [source](../../sibling/source.md).\n"
+            )
+        }
+    )
+
+    result = scan_vault(root)
+
+    assert result.issues == ()
+    assert result.edges == ()
+
+
+def test_escaping_declared_relation_remains_an_error(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: ['../../sibling/source.md']\n---\n# Example\n"
+            )
+        }
+    )
+
+    result = scan_vault(root)
+
+    assert [issue.code for issue in result.errors] == ["relation.unresolved"]
+
+
 def test_body_wikilink_aliases_resolve(make_vault) -> None:
     root = make_vault(
         notes={
