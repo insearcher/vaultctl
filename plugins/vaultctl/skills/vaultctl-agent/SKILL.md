@@ -36,7 +36,8 @@ Pass the resolved vault explicitly:
 ```bash
 vaultctl --vault "$vault" --format text context "<query>"
 vaultctl --vault "$vault" --format json search "<query>"
-vaultctl --vault "$vault" --format json query --kind "<kind>" --where status=active
+vaultctl --vault "$vault" --format json query \
+  --path "<area>/**" --kind "<kind>" --where status=active
 vaultctl --vault "$vault" --format json scan
 vaultctl --vault "$vault" --format json validate
 ```

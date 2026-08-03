@@ -118,9 +118,10 @@ modules.
 All machine-readable output includes a schema version. See
 [the compatibility contract](docs/compatibility.md).
 
-`query` supports exact kind, tag, property, field-presence, and incoming-edge
-filters. It replaces committed index files with an on-demand projection; it
-does not own sessions, hooks, Git state, or autosave. See
+`query` supports vault-relative path globs plus exact kind, tag, property,
+field-presence, and incoming-edge filters. It replaces committed index files
+with an on-demand projection; it does not own sessions, hooks, Git state, or
+autosave. See
 [derived node queries](docs/query.md).
 
 `merge plan` is intentionally not an apply command. It reads a base/ours/theirs
