@@ -248,8 +248,16 @@ def _resolve_target(
         return None
     target, provenance = cleaned
 
-    candidates = [target]
     parent = PurePosixPath(source_id).parent
+    source_relative = PurePosixPath(
+        posixpath.normpath((parent / target).as_posix())
+    ).as_posix()
+    if provenance == "markdown-link" and (
+        source_relative == ".." or source_relative.startswith("../")
+    ):
+        return None
+
+    candidates = [target]
     if parent.as_posix() != ".":
         candidates.append((parent / target).as_posix())
     for candidate in candidates:
