@@ -74,6 +74,7 @@ python -m venv .venv
 python -m pip install -e .
 
 vaultctl --vault examples/basic-vault scan
+vaultctl --vault examples/basic-vault query --kind document
 vaultctl --vault examples/basic-vault validate
 vaultctl --vault examples/basic-vault graph export
 vaultctl --vault examples/basic-vault search "release plan"
@@ -101,6 +102,7 @@ modules.
 | Command | Purpose |
 |---|---|
 | `scan` | Normalize Markdown files into versioned node and edge JSON |
+| `query` | Filter normalized nodes into a disposable derived view |
 | `validate` | Check the manifest, note schemas, and graph relations |
 | `graph export` | Export a compact versioned graph |
 | `search` | Rank notes with manifest-defined zones |
@@ -115,6 +117,11 @@ modules.
 
 All machine-readable output includes a schema version. See
 [the compatibility contract](docs/compatibility.md).
+
+`query` supports exact kind, tag, property, field-presence, and incoming-edge
+filters. It replaces committed index files with an on-demand projection; it
+does not own sessions, hooks, Git state, or autosave. See
+[derived node queries](docs/query.md).
 
 `merge plan` is intentionally not an apply command. It reads a base/ours/theirs
 triple, records exact revisions and content hashes, applies only declarative

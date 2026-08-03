@@ -11,7 +11,7 @@ class MarkdownError(VaultctlError):
 
 
 class QueryError(VaultctlError):
-    """A search or context query violates its manifest contract."""
+    """A read query violates its manifest contract."""
 
 
 class MergeError(VaultctlError):

@@ -7,6 +7,7 @@ Current schemas:
 | Output | Version |
 |---|---|
 | `scan` | `vaultctl.scan/v1` |
+| `query` | `vaultctl.query/v1` |
 | `validate` | `vaultctl.validate/v1` |
 | `graph export` | `vaultctl.graph/v1` |
 | `doctor` | `vaultctl.doctor/v1` |

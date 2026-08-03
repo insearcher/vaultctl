@@ -8,13 +8,18 @@ not the owner of Git, editing, approvals, or retry orchestration.
 ```text
 Agent or human
   ├── Git CLI / forge tools: inspect, branch, diff, stage, commit, push
-  ├── vaultctl: scan, plan, validate, and explicit one-path node apply
+  ├── vaultctl: scan, query, plan, validate, and explicit one-path node apply
   └── editor or application CLI: inspect and edit Markdown
 ```
 
 The agent skill or prompt owns the sequence and domain policy. Consumer
 repositories may provide different instructions while using the same
 `vaultctl` contracts and manifest model.
+
+Use `vaultctl query` for an on-demand filtered node or graph view. Do not
+commit a derived index merely to list nodes by kind, status, owner, or incoming
+edges. Process registries, session ownership, lifecycle hooks, and Git
+attribution remain consumer responsibilities rather than core query semantics.
 
 The repository publishes the generic sequence as
 `$vaultctl:vaultctl-agent` in the `insearcher` plugin marketplace. It is a
