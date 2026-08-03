@@ -36,12 +36,17 @@ Pass the resolved vault explicitly:
 ```bash
 vaultctl --vault "$vault" --format text context "<query>"
 vaultctl --vault "$vault" --format json search "<query>"
+vaultctl --vault "$vault" --format json query --kind "<kind>" --where status=active
 vaultctl --vault "$vault" --format json scan
 vaultctl --vault "$vault" --format json validate
 ```
 
 Use the output as evidence. Read only the notes needed for the task and defer
 source-of-truth precedence to the consumer.
+
+Use `query` for exact derived views instead of maintaining an index file. Its
+filters describe node and graph facts only; PID/session ownership, Git state,
+autosave, and domain-specific orphan policy remain with the consumer.
 
 ### Plan and apply one node
 

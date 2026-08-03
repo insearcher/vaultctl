@@ -13,7 +13,7 @@ from vaultctl.engine import scan_vault
 from vaultctl.errors import VaultctlError
 from vaultctl.manifest import load_manifest, resolve_vault_root
 from vaultctl.merge import load_merge_plan, plan_merge_files
-from vaultctl.model import ContextResult, ScanResult, SearchHit
+from vaultctl.model import ContextResult, Node, ScanResult, SearchHit
 from vaultctl.mutation import (
     apply_node_mutation_plan,
     diff_node_mutation_plan,
@@ -22,6 +22,7 @@ from vaultctl.mutation import (
     plan_node_mutation,
     render_node_mutation_plan,
 )
+from vaultctl.query import query_nodes
 from vaultctl.search import context as build_context
 from vaultctl.search import search as search_nodes
 from vaultctl.transaction import validate_merge_plan
@@ -49,6 +50,28 @@ def _parser() -> argparse.ArgumentParser:
     commands.add_parser("scan", help="Normalize notes into nodes and edges.")
     commands.add_parser("validate", help="Validate manifest, notes, and graph.")
     commands.add_parser("doctor", help="Inspect vault and backend availability.")
+
+    query = commands.add_parser(
+        "query",
+        help="Filter normalized nodes without creating a stored index.",
+    )
+    query.add_argument("--kind", action="append", default=[])
+    query.add_argument("--tag", action="append", default=[])
+    query.add_argument("--has-field", action="append", default=[])
+    query.add_argument(
+        "--where",
+        action="append",
+        default=[],
+        type=_property_filter,
+        metavar="FIELD=VALUE",
+        help="Require exact property equality; VALUE accepts JSON or plain text.",
+    )
+    query.add_argument(
+        "--without-incoming",
+        action="store_true",
+        help="Return only nodes with no resolved incoming graph edges.",
+    )
+    query.add_argument("--limit", type=int)
 
     search = commands.add_parser("search", help="Rank notes for a text query.")
     search.add_argument("query")
@@ -107,6 +130,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     node_apply.add_argument("--plan", type=Path, required=True)
     return parser
+
+
+def _property_filter(value: str) -> tuple[str, Any]:
+    field, separator, raw_value = value.partition("=")
+    if not separator or not field.strip():
+        raise argparse.ArgumentTypeError("expected FIELD=VALUE")
+    try:
+        parsed: Any = json.loads(raw_value)
+    except json.JSONDecodeError:
+        parsed = raw_value
+    return field.strip(), parsed
 
 
 def _scan_payload(result: ScanResult) -> dict[str, Any]:
@@ -170,6 +204,47 @@ def _search_payload(
         "valid": not result.errors,
         "query": query,
         "hits": [hit.to_dict() for hit in hits],
+        "issues": [issue.to_dict() for issue in result.issues],
+    }
+
+
+def _query_payload(
+    result: ScanResult,
+    *,
+    nodes: tuple[Node, ...],
+    kinds: tuple[str, ...],
+    tags: tuple[str, ...],
+    has_fields: tuple[str, ...],
+    properties: tuple[tuple[str, Any], ...],
+    without_incoming: bool,
+    limit: int | None,
+) -> dict[str, Any]:
+    incoming: dict[str, list[dict[str, Any]]] = {}
+    for edge in result.edges:
+        incoming.setdefault(edge.target, []).append(edge.to_dict())
+
+    projected_nodes = []
+    for node in nodes:
+        payload = node.to_dict()
+        payload["incomingEdges"] = incoming.get(node.id, [])
+        projected_nodes.append(payload)
+
+    return {
+        "schemaVersion": "vaultctl.query/v1",
+        "vaultId": result.manifest.vault_id,
+        "root": str(result.manifest.root),
+        "valid": not result.errors,
+        "filters": {
+            "kinds": list(dict.fromkeys(kind.strip() for kind in kinds)),
+            "tags": list(dict.fromkeys(tag.strip().lstrip("#") for tag in tags)),
+            "hasFields": list(dict.fromkeys(field.strip() for field in has_fields)),
+            "properties": [
+                {"field": field, "value": value} for field, value in properties
+            ],
+            "withoutIncoming": without_incoming,
+            "limit": limit,
+        },
+        "nodes": projected_nodes,
         "issues": [issue.to_dict() for issue in result.issues],
     }
 
@@ -250,6 +325,13 @@ def _render_text(payload: dict[str, Any]) -> str:
         return "\n".join(
             f"{hit['score']:>4}  {hit['path']} — {hit['title']}"
             for hit in payload["hits"]
+        )
+    if schema == "vaultctl.query/v1":
+        if not payload["nodes"]:
+            return "No matching nodes."
+        return "\n".join(
+            f"{node['kind']:<12}  {node['path']} — {node['title']}"
+            for node in payload["nodes"]
         )
     if schema == "vaultctl.context/v1":
         if not payload["hits"]:
@@ -370,6 +452,30 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload = _scan_payload(result)
         elif args.command == "validate":
             payload = _validation_payload(result)
+        elif args.command == "query":
+            kinds = tuple(args.kind)
+            tags = tuple(args.tag)
+            has_fields = tuple(args.has_field)
+            properties = tuple(args.where)
+            nodes = query_nodes(
+                result,
+                kinds=kinds,
+                tags=tags,
+                has_fields=has_fields,
+                properties=properties,
+                without_incoming=args.without_incoming,
+                limit=args.limit,
+            )
+            payload = _query_payload(
+                result,
+                nodes=nodes,
+                kinds=kinds,
+                tags=tags,
+                has_fields=has_fields,
+                properties=properties,
+                without_incoming=args.without_incoming,
+                limit=args.limit,
+            )
         elif args.command == "search":
             hits = search_nodes(result, args.query, limit=args.limit)
             payload = _search_payload(result, query=args.query, hits=hits)
@@ -386,6 +492,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if result.errors:
             return 1
         if args.command in {"search", "context"} and not payload["hits"]:
+            return 1
+        if args.command == "query" and not payload["nodes"]:
             return 1
         return 0
     except VaultctlError as exc:
