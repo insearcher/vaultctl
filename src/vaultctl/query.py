@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from typing import Any
 
+from vaultctl.engine import path_matches
 from vaultctl.errors import QueryError
 from vaultctl.model import Node, ScanResult
 
@@ -13,6 +15,7 @@ def _unique(values: tuple[str, ...]) -> tuple[str, ...]:
 def query_nodes(
     result: ScanResult,
     *,
+    paths: tuple[str, ...] = (),
     kinds: tuple[str, ...] = (),
     tags: tuple[str, ...] = (),
     has_fields: tuple[str, ...] = (),
@@ -21,6 +24,20 @@ def query_nodes(
     limit: int | None = None,
 ) -> tuple[Node, ...]:
     """Return a stable, read-only projection of nodes matching exact filters."""
+
+    selected_paths = _unique(tuple(pattern.strip() for pattern in paths))
+    for pattern in selected_paths:
+        candidate = PurePosixPath(pattern)
+        if (
+            not pattern
+            or "\\" in pattern
+            or candidate.is_absolute()
+            or candidate.as_posix() != pattern
+            or ".." in candidate.parts
+        ):
+            raise QueryError(
+                "query path patterns must be normalized vault-relative paths"
+            )
 
     selected_kinds = _unique(tuple(kind.strip() for kind in kinds))
     if any(not kind for kind in selected_kinds):
@@ -55,6 +72,10 @@ def query_nodes(
     incoming_targets = {edge.target for edge in result.edges}
     matches = []
     for node in result.nodes:
+        if selected_paths and not any(
+            path_matches(node.path, pattern) for pattern in selected_paths
+        ):
+            continue
         if selected_kinds and node.kind not in selected_kinds:
             continue
         if selected_tags and not set(selected_tags).issubset(node.tags):

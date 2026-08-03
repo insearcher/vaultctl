@@ -6,14 +6,17 @@ manifest remain the source of truth.
 
 ```bash
 vaultctl --vault /path/to/vault query --kind task --where status=active
+vaultctl --vault /path/to/vault query --path 'tasks/**' --path 'kb/**'
 vaultctl --vault /path/to/vault query --tag operations --has-field owner
 vaultctl --vault /path/to/vault query --without-incoming
 ```
 
 Filters are exact and deterministic:
 
-- repeated `--kind` values are alternatives;
+- repeated `--path` and `--kind` values are alternatives;
 - repeated `--tag`, `--has-field`, and `--where` filters must all match;
+- `--path` accepts normalized vault-relative globs with the same `*`, `?`, and
+  directory-aware `**` semantics as manifest path selectors;
 - `--where FIELD=VALUE` parses JSON scalars, arrays, and objects, falling back
   to a plain string when `VALUE` is not JSON;
 - `--without-incoming` selects nodes with no resolved incoming graph edge;

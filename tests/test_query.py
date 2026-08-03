@@ -71,6 +71,54 @@ def test_query_filters_exact_properties_tags_fields_and_kind(make_vault) -> None
     assert [node.path for node in nodes] == ["notes/source.md"]
 
 
+def test_query_path_patterns_are_alternatives_and_combine_with_other_filters(
+    make_vault,
+) -> None:
+    result = scan_vault(_query_vault(make_vault))
+
+    nodes = query_nodes(
+        result,
+        paths=("notes/**", "tasks/missing-*.md"),
+        tags=("shared",),
+    )
+
+    assert [node.path for node in nodes] == [
+        "notes/source.md",
+        "notes/target.md",
+    ]
+
+
+def test_query_path_double_star_crosses_directory_boundaries(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/root.md": "# Root\n",
+            "notes/nested/child.md": "# Child\n",
+        }
+    )
+    result = scan_vault(root)
+
+    nodes = query_nodes(result, paths=("notes/**",))
+
+    assert [node.path for node in nodes] == [
+        "notes/nested/child.md",
+        "notes/root.md",
+    ]
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    ("", "/notes/**", "../notes/**", "notes//**", r"notes\**"),
+)
+def test_query_rejects_unsafe_or_non_normalized_path_patterns(
+    make_vault,
+    pattern: str,
+) -> None:
+    result = scan_vault(_query_vault(make_vault))
+
+    with pytest.raises(QueryError, match="normalized vault-relative"):
+        query_nodes(result, paths=(pattern,))
+
+
 def test_query_normalizes_filter_names(make_vault) -> None:
     result = scan_vault(_query_vault(make_vault))
 
@@ -133,6 +181,8 @@ def test_query_cli_emits_versioned_projection_and_incoming_edges(
             "--vault",
             str(root),
             "query",
+            "--path",
+            "notes/**",
             "--kind",
             "document",
             "--where",
@@ -148,6 +198,7 @@ def test_query_cli_emits_versioned_projection_and_incoming_edges(
     assert payload["filters"]["properties"] == [
         {"field": "status", "value": "archived"}
     ]
+    assert payload["filters"]["paths"] == ["notes/**"]
     assert payload["nodes"][0]["path"] == "notes/target.md"
     assert payload["nodes"][0]["incomingEdges"][0]["source"] == "notes/source"
 

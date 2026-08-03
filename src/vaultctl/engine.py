@@ -30,10 +30,10 @@ class _PendingNode:
 
 
 def _is_ignored(path: str, patterns: tuple[str, ...]) -> bool:
-    return any(_path_matches(path, pattern) for pattern in patterns)
+    return any(path_matches(path, pattern) for pattern in patterns)
 
 
-def _path_matches(path: str, pattern: str) -> bool:
+def path_matches(path: str, pattern: str) -> bool:
     """Match vault-relative paths with *, ?, and directory-aware **."""
     expression = []
     index = 0
@@ -76,7 +76,7 @@ def _selector_matches(
 ) -> bool:
     checks = []
     if "path" in selector:
-        checks.append(_path_matches(path, selector["path"]))
+        checks.append(path_matches(path, selector["path"]))
     if "type" in selector:
         checks.append(properties.get("type") == selector["type"])
     if "tag" in selector:

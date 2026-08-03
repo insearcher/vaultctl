@@ -55,6 +55,13 @@ def _parser() -> argparse.ArgumentParser:
         "query",
         help="Filter normalized nodes without creating a stored index.",
     )
+    query.add_argument(
+        "--path",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="Match a vault-relative path glob; repeated values are alternatives.",
+    )
     query.add_argument("--kind", action="append", default=[])
     query.add_argument("--tag", action="append", default=[])
     query.add_argument("--has-field", action="append", default=[])
@@ -212,6 +219,7 @@ def _query_payload(
     result: ScanResult,
     *,
     nodes: tuple[Node, ...],
+    paths: tuple[str, ...],
     kinds: tuple[str, ...],
     tags: tuple[str, ...],
     has_fields: tuple[str, ...],
@@ -235,6 +243,7 @@ def _query_payload(
         "root": str(result.manifest.root),
         "valid": not result.errors,
         "filters": {
+            "paths": list(dict.fromkeys(pattern.strip() for pattern in paths)),
             "kinds": list(dict.fromkeys(kind.strip() for kind in kinds)),
             "tags": list(dict.fromkeys(tag.strip().lstrip("#") for tag in tags)),
             "hasFields": list(dict.fromkeys(field.strip() for field in has_fields)),
@@ -453,12 +462,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         elif args.command == "validate":
             payload = _validation_payload(result)
         elif args.command == "query":
+            paths = tuple(args.path)
             kinds = tuple(args.kind)
             tags = tuple(args.tag)
             has_fields = tuple(args.has_field)
             properties = tuple(args.where)
             nodes = query_nodes(
                 result,
+                paths=paths,
                 kinds=kinds,
                 tags=tags,
                 has_fields=has_fields,
@@ -469,6 +480,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload = _query_payload(
                 result,
                 nodes=nodes,
+                paths=paths,
                 kinds=kinds,
                 tags=tags,
                 has_fields=has_fields,
