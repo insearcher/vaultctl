@@ -208,11 +208,7 @@ def test_escaping_declared_relation_remains_an_error(make_vault) -> None:
     root = make_vault(
         notes={
             "notes/example.md": (
-                "---\n"
-                "tags: []\n"
-                "related: ['../../sibling/source.md']\n"
-                "---\n"
-                "# Example\n"
+                "---\ntags: []\nrelated: ['../../sibling/source.md']\n---\n# Example\n"
             )
         }
     )
