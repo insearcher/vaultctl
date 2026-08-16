@@ -24,7 +24,9 @@ Filters are exact and deterministic:
 
 JSON output uses `vaultctl.query/v1` and includes both outgoing and incoming
 edges for each selected node. A no-match query returns an empty `nodes` array
-and exit code `1`.
+and exit code `0`; an empty projection is a successful result, not an error.
+Vault validation issues are reported in the payload without changing the exit
+code; `validate` remains the command whose exit code reflects vault validity.
 
 The command does not define what a session, owner, or orphan means for a
 particular consumer. PID registries, agent lifecycle hooks, Git attribution,

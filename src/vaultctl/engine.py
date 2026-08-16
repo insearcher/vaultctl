@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import posixpath
 import re
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -328,25 +328,30 @@ def _relation_values(
 
 
 def _find_cycle_start(adjacency: dict[str, list[str]]) -> str | None:
+    """Depth-first cycle check without recursion, safe for deep chains."""
     visiting: set[str] = set()
     visited: set[str] = set()
 
-    def visit(node_id: str) -> bool:
-        if node_id in visiting:
-            return True
-        if node_id in visited:
-            return False
-        visiting.add(node_id)
-        for target in adjacency.get(node_id, ()):
-            if visit(target):
-                return True
-        visiting.remove(node_id)
-        visited.add(node_id)
-        return False
-
-    for node_id in adjacency:
-        if visit(node_id):
-            return node_id
+    for root_id in adjacency:
+        if root_id in visited:
+            continue
+        visiting.add(root_id)
+        stack: list[tuple[str, Iterator[str]]] = [
+            (root_id, iter(adjacency.get(root_id, ())))
+        ]
+        while stack:
+            node_id, targets = stack[-1]
+            for target in targets:
+                if target in visiting:
+                    return root_id
+                if target not in visited:
+                    visiting.add(target)
+                    stack.append((target, iter(adjacency.get(target, ()))))
+                    break
+            else:
+                stack.pop()
+                visiting.remove(node_id)
+                visited.add(node_id)
     return None
 
 

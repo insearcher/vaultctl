@@ -476,3 +476,32 @@ def test_acyclic_relation_detects_a_cycle(make_vault) -> None:
     result = scan_vault(root)
 
     assert [issue.code for issue in result.errors] == ["relation.cycle"]
+
+
+def test_acyclic_relation_handles_deep_chains(make_vault) -> None:
+    chain_length = 2048
+    notes = {}
+    for index in range(chain_length):
+        if index + 1 < chain_length:
+            related = f"related: ['[[notes/n{index + 1:04}]]']"
+        else:
+            related = "related: []"
+        notes[f"notes/n{index:04}.md"] = f"---\ntags: []\n{related}\n---\n# N{index}\n"
+    root = make_vault(
+        manifest_overrides={
+            "relations": {
+                "related": {
+                    "field": "related",
+                    "cardinality": "0..*",
+                    "targetKinds": ["document"],
+                    "acyclic": True,
+                }
+            }
+        },
+        notes=notes,
+    )
+
+    result = scan_vault(root)
+
+    assert result.errors == ()
+    assert len(result.nodes) == chain_length

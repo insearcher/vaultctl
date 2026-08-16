@@ -87,6 +87,59 @@ def test_search_and_context_emit_versioned_json(make_vault, capsys) -> None:
     assert context_payload["budget"]["truncated"] is False
 
 
+def test_read_emits_note_metadata_and_body(make_vault, capsys) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: [example]\nrelated: []\n---\n# Example\n\nBody text.\n"
+            )
+        }
+    )
+
+    exit_code = main(["--vault", str(root), "read", "notes/example.md"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schemaVersion"] == "vaultctl.read/v1"
+    assert payload["valid"] is True
+    assert payload["node"]["id"] == "notes/example"
+    assert payload["node"]["path"] == "notes/example.md"
+    assert payload["node"]["kind"] == "document"
+    assert payload["node"]["properties"] == {"tags": ["example"], "related": []}
+    assert payload["node"]["tags"] == ["example"]
+    assert payload["body"] == "# Example\n\nBody text.\n"
+
+
+def test_read_accepts_node_id_and_text_format(make_vault, capsys) -> None:
+    content = "---\ntags: []\nrelated: []\n---\n# Example\n"
+    root = make_vault(notes={"notes/example.md": content})
+
+    json_exit = main(["--vault", str(root), "read", "notes/example"])
+    json_payload = json.loads(capsys.readouterr().out)
+    text_exit = main(
+        ["--vault", str(root), "--format", "text", "read", "notes/example"]
+    )
+    text_output = capsys.readouterr().out
+
+    assert json_exit == 0
+    assert json_payload["node"]["path"] == "notes/example.md"
+    assert text_exit == 0
+    assert text_output == content
+
+
+def test_read_missing_note_is_a_user_error(make_vault, capsys) -> None:
+    root = make_vault(
+        notes={"notes/example.md": "---\ntags: []\nrelated: []\n---\n# Example\n"}
+    )
+
+    exit_code = main(["--vault", str(root), "read", "notes/missing.md"])
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schemaVersion"] == "vaultctl.error/v1"
+    assert "notes/missing.md" in payload["error"]
+
+
 def test_context_emits_group_contract(make_vault, capsys) -> None:
     root = make_vault(
         manifest_overrides={
@@ -143,7 +196,10 @@ def test_search_limit_error_uses_error_contract(make_vault, capsys) -> None:
     assert "exceeds manifest maxLimit" in payload["error"]
 
 
-def test_stopword_only_search_and_context_are_no_hit(make_vault, capsys) -> None:
+def test_stopword_only_search_and_context_are_empty_success(
+    make_vault,
+    capsys,
+) -> None:
     root = make_vault(
         notes={
             "notes/example.md": (
@@ -158,10 +214,48 @@ def test_stopword_only_search_and_context_are_no_hit(make_vault, capsys) -> None
     context_exit = main(["--vault", str(root), "context", "and"])
     context_payload = json.loads(capsys.readouterr().out)
 
-    assert search_exit == 1
+    assert search_exit == 0
     assert search_payload["hits"] == []
-    assert context_exit == 1
+    assert context_exit == 0
     assert context_payload["hits"] == []
+
+
+def test_search_and_context_report_hits_despite_invalid_notes(
+    make_vault,
+    capsys,
+) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\nRelease planning details.\n"
+            ),
+            "notes/broken.md": "---\ntags: [unclosed\n",
+        }
+    )
+
+    search_exit = main(["--vault", str(root), "search", "release"])
+    search_payload = json.loads(capsys.readouterr().out)
+    context_exit = main(["--vault", str(root), "context", "release"])
+    context_payload = json.loads(capsys.readouterr().out)
+
+    assert search_exit == 0
+    assert search_payload["valid"] is False
+    assert search_payload["hits"][0]["path"] == "notes/example.md"
+    assert context_exit == 0
+    assert context_payload["valid"] is False
+    assert context_payload["hits"][0]["path"] == "notes/example.md"
+    assert any(issue["code"] == "markdown.parse" for issue in context_payload["issues"])
+
+
+def test_validate_still_fails_for_invalid_notes(make_vault, capsys) -> None:
+    root = make_vault(notes={"notes/broken.md": "---\ntags: [unclosed\n"})
+
+    exit_code = main(["--vault", str(root), "validate"])
+
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is False
 
 
 def test_merge_plan_cli_is_read_only_and_versioned(make_vault, capsys) -> None:

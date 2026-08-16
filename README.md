@@ -79,6 +79,7 @@ vaultctl --vault examples/basic-vault validate
 vaultctl --vault examples/basic-vault graph export
 vaultctl --vault examples/basic-vault search "release plan"
 vaultctl --vault examples/basic-vault context "release plan"
+vaultctl --vault examples/basic-vault read notes/welcome.md
 vaultctl --vault examples/basic-vault doctor
 ```
 
@@ -107,6 +108,7 @@ modules.
 | `graph export` | Export a compact versioned graph |
 | `search` | Rank notes with manifest-defined zones |
 | `context` | Return ranked notes and snippets within an output budget |
+| `read` | Read one note's metadata and body by path or node id |
 | `node plan` | Plan and prospectively validate one typed create or update |
 | `node render` | Emit a current plan's exact candidate Markdown |
 | `node diff` | Emit a current plan's unified diff |

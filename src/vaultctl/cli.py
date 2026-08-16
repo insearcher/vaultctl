@@ -10,7 +10,7 @@ from typing import Any
 
 from vaultctl import __version__
 from vaultctl.engine import scan_vault
-from vaultctl.errors import VaultctlError
+from vaultctl.errors import MarkdownError, QueryError, VaultctlError
 from vaultctl.manifest import load_manifest, resolve_vault_root
 from vaultctl.merge import load_merge_plan, plan_merge_files
 from vaultctl.model import ContextResult, Node, ScanResult, SearchHit
@@ -90,6 +90,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     context.add_argument("query")
     context.add_argument("--limit", type=int)
+
+    read = commands.add_parser(
+        "read",
+        help="Read one note by vault-relative path or node id.",
+    )
+    read.add_argument("target")
 
     graph = commands.add_parser("graph", help="Graph operations.")
     graph_commands = graph.add_subparsers(dest="graph_command", required=True)
@@ -281,6 +287,35 @@ def _context_payload(
     }
 
 
+def _read_node(result: ScanResult, target: str) -> Node:
+    cleaned = target.strip()
+    node_id = cleaned[:-3] if cleaned.endswith(".md") else cleaned
+    for node in result.nodes:
+        if node.id == node_id:
+            return node
+    raise QueryError(f"read target {target!r} does not match a note in the vault")
+
+
+def _read_payload(result: ScanResult, *, node: Node) -> dict[str, Any]:
+    return {
+        "schemaVersion": "vaultctl.read/v1",
+        "vaultId": result.manifest.vault_id,
+        "root": str(result.manifest.root),
+        "valid": not result.errors,
+        "node": node.to_dict(),
+        "body": node.body,
+        "issues": [issue.to_dict() for issue in result.issues],
+    }
+
+
+def _read_note_source(result: ScanResult, node: Node) -> str:
+    try:
+        raw = (result.manifest.root / node.path).read_bytes()
+        return raw.decode("utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise MarkdownError(f"cannot read {node.path}: {exc}") from exc
+
+
 def _doctor_payload(root: Path) -> dict[str, Any]:
     manifest = load_manifest(root)
     return {
@@ -457,6 +492,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0 if receipt.state == "applied" else 1
 
         result = scan_vault(root)
+        if args.command == "read":
+            node = _read_node(result, args.target)
+            if args.format == "text":
+                sys.stdout.write(_read_note_source(result, node))
+            else:
+                _emit(_read_payload(result, node=node), args.format)
+            return 0
         if args.command == "scan":
             payload = _scan_payload(result)
         elif args.command == "validate":
@@ -501,13 +543,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             payload = _graph_payload(result)
         _emit(payload, args.format)
-        if result.errors:
-            return 1
-        if args.command in {"search", "context"} and not payload["hits"]:
-            return 1
-        if args.command == "query" and not payload["nodes"]:
-            return 1
-        return 0
+        if args.command in {"search", "context", "query"}:
+            return 0
+        return 1 if result.errors else 0
     except VaultctlError as exc:
         if args.format == "json":
             print(
