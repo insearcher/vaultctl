@@ -246,10 +246,14 @@ def render_markdown_candidate(
     return f"---\n{serialized}---\n{body}".encode()
 
 
+def _mask_code_and_comments(body: str) -> str:
+    masked = FENCED_CODE_RE.sub("", body)
+    masked = INLINE_CODE_RE.sub("", masked)
+    return HTML_COMMENT_RE.sub("", masked)
+
+
 def extract_body_links(body: str) -> tuple[tuple[str, str], ...]:
-    searchable = FENCED_CODE_RE.sub("", body)
-    searchable = INLINE_CODE_RE.sub("", searchable)
-    searchable = HTML_COMMENT_RE.sub("", searchable)
+    searchable = _mask_code_and_comments(body)
     links: list[tuple[str, str]] = []
     links.extend(
         (match.group(1), "wikilink") for match in WIKILINK_RE.finditer(searchable)
@@ -270,7 +274,7 @@ def normalize_tags(value: Any, body: str = "") -> tuple[str, ...]:
         candidates = [item for item in value if isinstance(item, str)]
     else:
         candidates = []
-    candidates.extend(BODY_TAG_RE.findall(body))
+    candidates.extend(BODY_TAG_RE.findall(_mask_code_and_comments(body)))
 
     normalized = []
     for tag in candidates:

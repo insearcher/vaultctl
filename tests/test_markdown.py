@@ -111,6 +111,18 @@ def test_tags_are_normalized_without_duplicates() -> None:
     )
 
 
+def test_body_tag_extraction_ignores_code_and_comments() -> None:
+    tags = normalize_tags(
+        [],
+        "Keep #real.\n"
+        "`#inline-example`\n"
+        "```c\n#include <stdio.h>\n#define EXAMPLE 1\n```\n"
+        "<!-- #comment-example -->\n",
+    )
+
+    assert tags == ("real",)
+
+
 def test_candidate_renderer_preserves_semantic_noop_bytes() -> None:
     current = b'---\ntitle: "Quoted" # keep\ntags: [example]\n...\n# Example\n'
 
