@@ -161,6 +161,11 @@ vault-relative path glob:
 Boosts never create a hit by themselves. They only refine deterministic
 ordering among nodes that already match the query.
 
+Cached rankings additionally support Snowball stemming and a freshness
+multiplier via `search.stemming` and `search.freshness`; both are active by
+default and documented in
+[the incremental read index](read-index.md).
+
 When no search configuration is present, `vaultctl` uses a stable built-in
 general-purpose scorer. Context reuses the search ranking and adds matching
 body lines without exceeding the manifest's content-character budget. When a
