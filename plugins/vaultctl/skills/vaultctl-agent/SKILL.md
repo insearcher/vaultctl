@@ -36,6 +36,7 @@ Pass the resolved vault explicitly:
 ```bash
 vaultctl --vault "$vault" --format text context "<query>"
 vaultctl --vault "$vault" --format json search "<query>"
+vaultctl --vault "$vault" --format json read "<note-path-or-id>"
 vaultctl --vault "$vault" --format json query \
   --path "<area>/**" --kind "<kind>" --where status=active
 vaultctl --vault "$vault" --format json scan
@@ -54,7 +55,8 @@ autosave, and domain-specific orphan policy remain with the consumer.
 Keep request, plan, and receipt files in a private temporary directory outside
 the vault.
 
-1. Read the exact current note and obtain its raw source hash.
+1. Read the exact current note (`vaultctl read`) and obtain its raw source
+   hash.
 2. Construct one `vaultctl.node-mutation-request/v1` create or update request
    for an exact vault-relative path and declared node kind.
 3. Plan and inspect before any write:

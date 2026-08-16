@@ -87,6 +87,59 @@ def test_search_and_context_emit_versioned_json(make_vault, capsys) -> None:
     assert context_payload["budget"]["truncated"] is False
 
 
+def test_read_emits_note_metadata_and_body(make_vault, capsys) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: [example]\nrelated: []\n---\n# Example\n\nBody text.\n"
+            )
+        }
+    )
+
+    exit_code = main(["--vault", str(root), "read", "notes/example.md"])
+
+    assert exit_code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schemaVersion"] == "vaultctl.read/v1"
+    assert payload["valid"] is True
+    assert payload["node"]["id"] == "notes/example"
+    assert payload["node"]["path"] == "notes/example.md"
+    assert payload["node"]["kind"] == "document"
+    assert payload["node"]["properties"] == {"tags": ["example"], "related": []}
+    assert payload["node"]["tags"] == ["example"]
+    assert payload["body"] == "# Example\n\nBody text.\n"
+
+
+def test_read_accepts_node_id_and_text_format(make_vault, capsys) -> None:
+    content = "---\ntags: []\nrelated: []\n---\n# Example\n"
+    root = make_vault(notes={"notes/example.md": content})
+
+    json_exit = main(["--vault", str(root), "read", "notes/example"])
+    json_payload = json.loads(capsys.readouterr().out)
+    text_exit = main(
+        ["--vault", str(root), "--format", "text", "read", "notes/example"]
+    )
+    text_output = capsys.readouterr().out
+
+    assert json_exit == 0
+    assert json_payload["node"]["path"] == "notes/example.md"
+    assert text_exit == 0
+    assert text_output == content
+
+
+def test_read_missing_note_is_a_user_error(make_vault, capsys) -> None:
+    root = make_vault(
+        notes={"notes/example.md": "---\ntags: []\nrelated: []\n---\n# Example\n"}
+    )
+
+    exit_code = main(["--vault", str(root), "read", "notes/missing.md"])
+
+    assert exit_code == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schemaVersion"] == "vaultctl.error/v1"
+    assert "notes/missing.md" in payload["error"]
+
+
 def test_context_emits_group_contract(make_vault, capsys) -> None:
     root = make_vault(
         manifest_overrides={
