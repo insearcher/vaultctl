@@ -111,18 +111,30 @@ def test_removed_note_is_evicted_from_cache(make_vault) -> None:
         }
     )
     _build(root)
+
+    index = open_index(root)
+    assert index is not None
+    gone_id = index._connection.execute(
+        "SELECT rowid FROM files WHERE path = ?", ("notes/gone.md",)
+    ).fetchone()[0]
+    index.close()
+
     (root / "notes" / "gone.md").unlink()
 
     index = open_index(root)
     assert index is not None
     assert [node.path for node in index.scan_result().nodes] == ["notes/keep.md"]
     assert index.search_hits("xyzzy") == ()
-    for table in ("files", "nodes", "postings"):
+    for table, column in (("files", "path"), ("nodes", "path")):
         count = index._connection.execute(
-            f"SELECT COUNT(*) FROM {table} WHERE path = ?",  # noqa: S608
+            f"SELECT COUNT(*) FROM {table} WHERE {column} = ?",  # noqa: S608
             ("notes/gone.md",),
         ).fetchone()[0]
         assert count == 0
+    orphaned = index._connection.execute(
+        "SELECT COUNT(*) FROM postings WHERE file = ?", (gone_id,)
+    ).fetchone()[0]
+    assert orphaned == 0
     index.close()
 
 

@@ -110,12 +110,11 @@ CREATE INDEX IF NOT EXISTS idx_edges_src ON edges (src);
 CREATE INDEX IF NOT EXISTS idx_edges_dst ON edges (dst);
 CREATE TABLE IF NOT EXISTS postings (
   term TEXT NOT NULL,
-  path TEXT NOT NULL,
+  file INTEGER NOT NULL,
   zone INTEGER NOT NULL,
   count INTEGER NOT NULL,
-  PRIMARY KEY (term, path, zone)
-);
-CREATE INDEX IF NOT EXISTS idx_postings_path ON postings (path);
+  PRIMARY KEY (term, file, zone)
+) WITHOUT ROWID;
 """
 _TABLES = ("meta", "files", "nodes", "edges", "postings")
 
@@ -370,9 +369,9 @@ class VaultIndex:
         for path in sorted(changed):
             self._process_file(cursor, path, walked[path])
         for path in removed:
+            self._evict_postings(cursor, path)
             cursor.execute("DELETE FROM files WHERE path = ?", (path,))
             cursor.execute("DELETE FROM nodes WHERE path = ?", (path,))
-            cursor.execute("DELETE FROM postings WHERE path = ?", (path,))
         if rebuild or changed or removed:
             self._reassemble(cursor)
             for key, value in expected.items():
@@ -433,6 +432,7 @@ class VaultIndex:
                 )
                 issues.extend(item_issues)
 
+        self._evict_postings(cursor, relative)
         cursor.execute(
             "INSERT INTO files (path, mtime_ns, size, escaped, issues) "
             "VALUES (?, ?, ?, ?, ?) "
@@ -448,7 +448,6 @@ class VaultIndex:
             ),
         )
         cursor.execute("DELETE FROM nodes WHERE path = ?", (relative,))
-        cursor.execute("DELETE FROM postings WHERE path = ?", (relative,))
         if pending is None:
             return
         node = pending.node
@@ -474,17 +473,61 @@ class VaultIndex:
                 ),
             ),
         )
+        file_id = cursor.execute(
+            "SELECT rowid FROM files WHERE path = ?", (relative,)
+        ).fetchone()[0]
         cursor.executemany(
-            "INSERT INTO postings (term, path, zone, count) VALUES (?, ?, ?, ?) "
-            "ON CONFLICT (term, path, zone) DO UPDATE SET "
-            "count = count + excluded.count",
-            self._posting_rows(node),
+            "INSERT OR REPLACE INTO postings (term, file, zone, count) "
+            "VALUES (?, ?, ?, ?)",
+            (
+                (term, file_id, zone_index, count)
+                for term, zone_index, count in self._posting_entries(node)
+            ),
         )
 
-    def _posting_rows(self, node: Node) -> list[tuple[str, str, int, int]]:
+    def _evict_postings(self, cursor: sqlite3.Cursor, relative: str) -> None:
+        """Delete a path's postings by recomputing their exact keys.
+
+        The postings table has no per-file index; the old node row still holds
+        the text that produced the previous rows, so their keys are recomputed
+        deterministically instead of scanning the whole table.
+        """
+        file_row = cursor.execute(
+            "SELECT rowid FROM files WHERE path = ?", (relative,)
+        ).fetchone()
+        if file_row is None:
+            return
+        old = cursor.execute(
+            "SELECT id, kind, title, properties, tags, source_hash, body, "
+            "headings FROM nodes WHERE path = ?",
+            (relative,),
+        ).fetchone()
+        if old is None:
+            return
+        node = Node(
+            id=old[0],
+            path=relative,
+            kind=old[1],
+            title=old[2],
+            properties=json.loads(old[3]),
+            tags=tuple(json.loads(old[4])),
+            source_hash=old[5],
+            body=old[6],
+            headings=tuple(json.loads(old[7])),
+        )
+        cursor.executemany(
+            "DELETE FROM postings WHERE term = ? AND file = ? AND zone = ?",
+            (
+                (term, file_row[0], zone_index)
+                for term, zone_index, _ in self._posting_entries(node)
+            ),
+        )
+
+    def _posting_entries(self, node: Node) -> list[tuple[str, int, int]]:
+        """Index every token twice: verbatim, and stemmed when that differs."""
         zones = resolved_zones(self.manifest)
         stop = stop_words(self.manifest)
-        rows: list[tuple[str, str, int, int]] = []
+        entries: list[tuple[str, int, int]] = []
         for zone_index, zone in enumerate(zones):
             exact: Counter[str] = Counter()
             for token in TOKEN_RE.findall(zone_text(node, zone).lower()):
@@ -492,15 +535,15 @@ class VaultIndex:
                     exact[token] += 1
             stems: Counter[str] = Counter()
             for token, count in exact.items():
-                stems[stem_term(token)] += count
-            rows.extend(
-                (term, node.path, zone_index, count) for term, count in exact.items()
-            )
-            rows.extend(
-                (f"{STEM_PREFIX}{term}", node.path, zone_index, count)
+                stem = stem_term(token)
+                if stem != token:
+                    stems[stem] += count
+            entries.extend((term, zone_index, count) for term, count in exact.items())
+            entries.extend(
+                (f"{STEM_PREFIX}{term}", zone_index, count)
                 for term, count in stems.items()
             )
-        return rows
+        return entries
 
     def _reassemble(self, cursor: sqlite3.Cursor) -> None:
         issues: list[ValidationIssue] = []
@@ -666,24 +709,29 @@ class VaultIndex:
         candidates = self._candidate_paths(tokens, zones, stemming_enabled=stemming)
         if not candidates:
             return (), {}
-        nodes, mtimes = self._load_nodes(candidates)
+        paths = [path for path, _ in candidates]
+        ids_by_path = dict(candidates)
+        nodes, mtimes = self._load_nodes(paths)
         stem_counts = (
-            self._stem_counts(candidates, tokens) if stemming and tokens else {}
+            self._stem_counts([file_id for _, file_id in candidates], tokens)
+            if stemming and tokens
+            else {}
         )
         half_life, weight = self._freshness_config(config)
         today = date.today()
         hits = []
-        for path in candidates:
+        for path in paths:
             node = nodes.get(path)
             if node is None:
                 continue
+            file_id = ids_by_path[path]
 
             def _lookup(
                 zone_index: int,
                 token: str,
-                path: str = path,
+                file_id: int = file_id,
             ) -> int:
-                return stem_counts.get((path, zone_index, stem_term(token)), 0)
+                return stem_counts.get((file_id, zone_index, stem_term(token)), 0)
 
             hit = score_node(
                 node,
@@ -721,7 +769,8 @@ class VaultIndex:
         zones: tuple[dict[str, Any], ...],
         *,
         stemming_enabled: bool,
-    ) -> list[str]:
+    ) -> list[tuple[str, int]]:
+        """Rank candidate ``(path, file_id)`` pairs from the postings table."""
         if not tokens:
             return []
         row = self._connection.execute("SELECT COUNT(*) FROM nodes").fetchone()
@@ -730,25 +779,25 @@ class VaultIndex:
             return []
         weights = [zone.get("weight", 0) for zone in zones]
         caps = [zone.get("countCap", 1) for zone in zones]
-        scores: dict[str, float] = {}
+        scores: dict[int, float] = {}
 
         def _accumulate(
-            term_rows: list[tuple[str, str, int, int]],
+            term_rows: list[tuple[str, int, int, int]],
             factor: float,
         ) -> None:
-            by_term: dict[str, list[tuple[str, int, int]]] = {}
-            for term, path, zone_index, count in term_rows:
+            by_term: dict[str, list[tuple[int, int, int]]] = {}
+            for term, file_id, zone_index, count in term_rows:
                 if zone_index < len(weights):
-                    by_term.setdefault(term, []).append((path, zone_index, count))
+                    by_term.setdefault(term, []).append((file_id, zone_index, count))
             for rows in by_term.values():
-                document_frequency = len({path for path, _, _ in rows})
+                document_frequency = len({file_id for file_id, _, _ in rows})
                 idf = math.log(
                     1
                     + (node_count - document_frequency + 0.5)
                     / (document_frequency + 0.5)
                 )
-                for path, zone_index, count in rows:
-                    scores[path] = scores.get(path, 0.0) + (
+                for file_id, zone_index, count in rows:
+                    scores[file_id] = scores.get(file_id, 0.0) + (
                         weights[zone_index]
                         * min(count, caps[zone_index])
                         * idf
@@ -757,19 +806,55 @@ class VaultIndex:
 
         for token in tokens:
             exact_rows = self._connection.execute(
-                "SELECT term, path, zone, count FROM postings "
+                "SELECT term, file, zone, count FROM postings "
                 "WHERE term GLOB ? || '*' AND term NOT GLOB 's:*'",
                 (token,),
             ).fetchall()
             _accumulate(exact_rows, 1.0)
             if stemming_enabled:
-                stem_rows = self._connection.execute(
-                    "SELECT term, path, zone, count FROM postings WHERE term = ?",
-                    (f"{STEM_PREFIX}{stem_term(token)}",),
-                ).fetchall()
-                _accumulate(stem_rows, STEM_MATCH_WEIGHT)
-        ranked = sorted(scores, key=lambda path: (-scores[path], path))
+                for term in self._stem_lookup_terms(token):
+                    stem_rows = self._connection.execute(
+                        "SELECT term, file, zone, count FROM postings WHERE term = ?",
+                        (term,),
+                    ).fetchall()
+                    _accumulate(stem_rows, STEM_MATCH_WEIGHT)
+        paths_by_id = self._paths_for_ids(list(scores))
+        ranked = sorted(
+            (
+                (paths_by_id[file_id], file_id)
+                for file_id in scores
+                if file_id in paths_by_id
+            ),
+            key=lambda item: (-scores[item[1]], item[0]),
+        )
         return ranked[:CANDIDATE_LIMIT]
+
+    @staticmethod
+    def _stem_lookup_terms(token: str) -> list[str]:
+        """Postings terms that count as stem-equivalent matches for a token.
+
+        Surface forms identical to their own stem are stored once, verbatim,
+        so the stem lookup consults both the raw stem (unless the exact
+        prefix query already covered it) and the ``s:``-prefixed entry.
+        """
+        stem = stem_term(token)
+        terms = []
+        if not stem.startswith(token):
+            terms.append(stem)
+        terms.append(f"{STEM_PREFIX}{stem}")
+        return terms
+
+    def _paths_for_ids(self, file_ids: list[int]) -> dict[int, str]:
+        paths: dict[int, str] = {}
+        for chunk_start in range(0, len(file_ids), 500):
+            chunk = file_ids[chunk_start : chunk_start + 500]
+            placeholders = ", ".join("?" for _ in chunk)
+            for file_id, path in self._connection.execute(
+                f"SELECT rowid, path FROM files WHERE rowid IN ({placeholders})",
+                chunk,
+            ):
+                paths[file_id] = path
+        return paths
 
     def _load_nodes(
         self,
@@ -805,22 +890,30 @@ class VaultIndex:
 
     def _stem_counts(
         self,
-        paths: list[str],
+        file_ids: list[int],
         tokens: tuple[str, ...],
-    ) -> dict[tuple[str, int, str], int]:
-        stems = {f"{STEM_PREFIX}{stem_term(token)}" for token in tokens}
-        counts: dict[tuple[str, int, str], int] = {}
-        terms = sorted(stems)
-        for chunk_start in range(0, len(paths), 400):
-            chunk = paths[chunk_start : chunk_start + 400]
-            path_marks = ", ".join("?" for _ in chunk)
-            term_marks = ", ".join("?" for _ in terms)
-            for term, path, zone_index, count in self._connection.execute(
-                "SELECT term, path, zone, count FROM postings "
-                f"WHERE term IN ({term_marks}) AND path IN ({path_marks})",
-                (*terms, *chunk),
+    ) -> dict[tuple[int, int, str], int]:
+        """Sum stem-equivalent counts per ``(file_id, zone, stem)``."""
+        terms: set[str] = set()
+        for token in tokens:
+            stem = stem_term(token)
+            terms.update((stem, f"{STEM_PREFIX}{stem}"))
+        counts: dict[tuple[int, int, str], int] = {}
+        ordered_terms = sorted(terms)
+        term_marks = ", ".join("?" for _ in ordered_terms)
+        for chunk_start in range(0, len(file_ids), 400):
+            chunk = file_ids[chunk_start : chunk_start + 400]
+            file_marks = ", ".join("?" for _ in chunk)
+            for term, file_id, zone_index, count in self._connection.execute(
+                "SELECT term, file, zone, count FROM postings "
+                f"WHERE term IN ({term_marks}) AND file IN ({file_marks})",
+                (*ordered_terms, *chunk),
             ):
-                counts[(path, zone_index, term[len(STEM_PREFIX) :])] = count
+                stem = (
+                    term[len(STEM_PREFIX) :] if term.startswith(STEM_PREFIX) else term
+                )
+                key = (file_id, zone_index, stem)
+                counts[key] = counts.get(key, 0) + count
         return counts
 
     # -- graph -------------------------------------------------------------

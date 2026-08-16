@@ -58,11 +58,11 @@ the cache. `scan`, `validate`, and `graph export` always run a full parse.
 
 Cached search is a candidate/rescore pipeline:
 
-1. **Candidates** come from the `postings` table (term, path, zone, count).
-   Query tokens match postings by prefix, and — when stemming is enabled —
-   by Snowball stem at weight `0.8`. Each match contributes
-   `zoneWeight × min(count, countCap) × idf`, where
-   `idf = ln(1 + (N - df + 0.5) / (df + 0.5))`.
+1. **Candidates** come from the `postings` table (term, file, zone, count),
+   a single clustered B-tree keyed by term. Query tokens match postings by
+   prefix, and — when stemming is enabled — by Snowball stem at weight
+   `0.8`. Each match contributes `zoneWeight × min(count, countCap) × idf`,
+   where `idf = ln(1 + (N - df + 0.5) / (df + 0.5))`.
 2. **Rescoring** loads only the top 200 candidates as full nodes and applies
    the exact manifest zone scorer, including phrase bonuses and boosts, so
    the final ranking keeps the established search semantics.
