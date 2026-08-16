@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
   "jsonschema>=4.21,<5",
   "ruamel.yaml>=0.18,<0.20",
+  "snowballstemmer>=2.2,<4",
 ]
 
 [project.urls]

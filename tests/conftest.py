@@ -12,6 +12,14 @@ SCHEMA_URL = (
 )
 
 
+@pytest.fixture(autouse=True)
+def isolated_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Keep every test's read index cache away from the user state directory."""
+    state = tmp_path / "vaultctl-state"
+    monkeypatch.setenv("VAULTCTL_STATE_DIR", str(state))
+    return state
+
+
 @pytest.fixture
 def make_vault(tmp_path: Path):
     def factory(
