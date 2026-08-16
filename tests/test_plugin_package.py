@@ -47,7 +47,7 @@ def test_cross_runtime_plugin_manifests_match() -> None:
     ):
         assert codex[field] == claude[field]
     assert codex["name"] == "vaultctl"
-    assert codex["version"] == "0.1.1"
+    assert codex["version"] == "0.1.2"
     assert codex["skills"] == "./skills/"
     for forbidden in ("apps", "hooks", "mcpServers"):
         assert forbidden not in codex

@@ -1,6 +1,6 @@
 {
   "name": "vaultctl",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Portable agent workflows for safe, schema-driven Markdown vault operations with vaultctl.",
   "author": {
     "name": "insearcher",

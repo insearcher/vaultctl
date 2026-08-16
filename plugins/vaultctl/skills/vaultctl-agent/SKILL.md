@@ -37,14 +37,23 @@ Pass the resolved vault explicitly:
 vaultctl --vault "$vault" --format text context "<query>"
 vaultctl --vault "$vault" --format json search "<query>"
 vaultctl --vault "$vault" --format json read "<note-path-or-id>"
+vaultctl --vault "$vault" --format json neighbors "<note-path-or-id>" \
+  --depth 2 --direction both
 vaultctl --vault "$vault" --format json query \
   --path "<area>/**" --kind "<kind>" --where status=active
+vaultctl --vault "$vault" --format json index status
 vaultctl --vault "$vault" --format json scan
 vaultctl --vault "$vault" --format json validate
 ```
 
 Use the output as evidence. Read only the notes needed for the task and defer
 source-of-truth precedence to the consumer.
+
+Repeated reads are served from a disposable cache outside the vault; use
+`neighbors` to inspect a note's typed graph surroundings and `index status`
+to see the cache path and staleness. When cache behavior itself is in
+question, rerun the read with the global `--no-cache` flag to force a full
+scan; results remain the evidence either way.
 
 Use `query` for exact derived views instead of maintaining an index file. Its
 filters describe node and graph facts only; PID/session ownership, Git state,
