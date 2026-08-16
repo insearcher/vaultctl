@@ -108,7 +108,7 @@ class SearchHit:
     path: str
     kind: str
     title: str
-    score: int
+    score: float
     matched_zones: tuple[str, ...]
     snippets: tuple[str, ...] = ()
     properties: dict[str, Any] = field(default_factory=dict)

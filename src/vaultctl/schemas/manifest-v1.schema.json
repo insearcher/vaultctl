@@ -218,6 +218,33 @@
           "minimum": 1,
           "maximum": 1000,
           "default": 100
+        },
+        "freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "halfLifeDays": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "default": 90
+            },
+            "weight": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10,
+              "default": 0.15
+            }
+          }
+        },
+        "stemming": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true
+            }
+          }
         }
       }
     },

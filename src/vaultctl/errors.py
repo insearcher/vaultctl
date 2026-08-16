@@ -20,3 +20,7 @@ class MergeError(VaultctlError):
 
 class MutationError(VaultctlError):
     """A node mutation request or plan cannot be handled safely."""
+
+
+class CacheError(VaultctlError):
+    """The disposable read-index cache is unavailable or unusable."""

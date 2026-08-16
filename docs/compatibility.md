@@ -14,6 +14,8 @@ Current schemas:
 | `search` | `vaultctl.search/v1` |
 | `context` | `vaultctl.context/v1` |
 | `read` | `vaultctl.read/v1` |
+| `neighbors` | `vaultctl.neighbors/v1` |
+| `index status` / `index rebuild` | `vaultctl.index-status/v1` |
 | node mutation request input | `vaultctl.node-mutation-request/v1` |
 | `node plan` | `vaultctl.node-mutation-plan/v1` |
 | `node apply` | `vaultctl.node-mutation-receipt/v1` |

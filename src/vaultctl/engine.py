@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import posixpath
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -11,6 +11,7 @@ from urllib.parse import unquote, urlsplit
 from vaultctl.errors import MarkdownError
 from vaultctl.manifest import load_manifest
 from vaultctl.markdown import (
+    ParsedMarkdown,
     extract_body_links,
     normalize_tags,
     parse_markdown,
@@ -24,9 +25,11 @@ MARKDOWN_LINK_VALUE_RE = re.compile(r"^\[[^\]]+\]\((.+)\)$")
 
 
 @dataclass(frozen=True)
-class _PendingNode:
+class PendingNode:
+    """One parsed note plus its raw body links, before graph assembly."""
+
     node: Node
-    body: str
+    links: tuple[tuple[str, str], ...]
 
 
 def _is_ignored(path: str, patterns: tuple[str, ...]) -> bool:
@@ -385,6 +388,175 @@ def _cycle_issues(
     return tuple(issues)
 
 
+def build_pending(
+    parsed: ParsedMarkdown,
+    *,
+    relative: str,
+    manifest: VaultManifest,
+) -> tuple[PendingNode, tuple[ValidationIssue, ...]]:
+    """Classify and validate one parsed note without global graph context."""
+    issues: list[ValidationIssue] = []
+    tags = normalize_tags(parsed.properties.get("tags"), parsed.body)
+    kind, classification_issues = _classify(
+        manifest,
+        path=relative,
+        properties=parsed.properties,
+        tags=tags,
+    )
+    issues.extend(classification_issues)
+    node = Node(
+        id=relative[:-3],
+        path=relative,
+        kind=kind,
+        title=parsed.title,
+        properties=parsed.properties,
+        tags=tags,
+        source_hash=parsed.source_hash,
+        body=parsed.body,
+        headings=parsed.headings,
+    )
+    issues.extend(_validate_fields(node, manifest))
+    return (
+        PendingNode(node=node, links=extract_body_links(parsed.body)),
+        tuple(issues),
+    )
+
+
+def assemble(
+    manifest: VaultManifest,
+    pending: Sequence[PendingNode],
+    issues: Sequence[ValidationIssue],
+) -> ScanResult:
+    """Resolve edges and global validation for already-parsed notes."""
+    collected = list(issues)
+    node_ids = {item.node.id for item in pending}
+    basename_index: dict[str, set[str]] = {}
+    for node_id in node_ids:
+        basename_index.setdefault(PurePosixPath(node_id).name, set()).add(node_id)
+
+    completed = []
+    for item in pending:
+        edges: list[Edge] = []
+        for relation, contract in manifest.relations.items():
+            values, relation_issues = _relation_values(
+                item.node,
+                relation=relation,
+                contract=contract,
+            )
+            collected.extend(relation_issues)
+            for raw_target in values:
+                resolved = _resolve_target(
+                    raw_target,
+                    source_id=item.node.id,
+                    node_ids=node_ids,
+                    basename_index=basename_index,
+                )
+                if resolved is None:
+                    continue
+                target, source_syntax = resolved
+                edges.append(
+                    Edge(
+                        source=item.node.id,
+                        relation=relation,
+                        target=target,
+                        provenance=f"frontmatter:{contract['field']}:{source_syntax}",
+                        source_location=f"frontmatter.{contract['field']}",
+                    )
+                )
+                if target not in node_ids:
+                    collected.append(
+                        ValidationIssue(
+                            level="error",
+                            code="relation.unresolved",
+                            message=(
+                                f"relation {relation!r} targets missing node {target!r}"
+                            ),
+                            path=item.node.path,
+                        )
+                    )
+                    continue
+                target_kind = next(
+                    pending_item.node.kind
+                    for pending_item in pending
+                    if pending_item.node.id == target
+                )
+                if target_kind not in contract["targetKinds"]:
+                    collected.append(
+                        ValidationIssue(
+                            level="error",
+                            code="relation.target-kind",
+                            message=(
+                                f"relation {relation!r} cannot target kind "
+                                f"{target_kind!r}"
+                            ),
+                            path=item.node.path,
+                        )
+                    )
+
+        for raw_target, syntax in item.links:
+            resolved = _resolve_target(
+                raw_target,
+                source_id=item.node.id,
+                node_ids=node_ids,
+                basename_index=basename_index,
+                syntax_hint=syntax,
+            )
+            if resolved is None:
+                continue
+            target, _ = resolved
+            edges.append(
+                Edge(
+                    source=item.node.id,
+                    relation="link",
+                    target=target,
+                    provenance=syntax,
+                )
+            )
+            if target not in node_ids:
+                collected.append(
+                    ValidationIssue(
+                        level="warning",
+                        code="link.unresolved",
+                        message=f"link targets missing node {target!r}",
+                        path=item.node.path,
+                    )
+                )
+
+        completed.append(
+            replace(
+                item.node,
+                outgoing_edges=tuple(
+                    sorted(
+                        edges,
+                        key=lambda edge: (
+                            edge.relation,
+                            edge.target,
+                            edge.provenance,
+                        ),
+                    )
+                ),
+            )
+        )
+
+    nodes = tuple(sorted(completed, key=lambda node: node.id))
+    collected.extend(_cycle_issues(nodes, manifest))
+    return ScanResult(
+        manifest=manifest,
+        nodes=nodes,
+        issues=tuple(
+            sorted(
+                collected,
+                key=lambda issue: (
+                    issue.path or "",
+                    issue.level,
+                    issue.code,
+                    issue.message,
+                ),
+            )
+        ),
+    )
+
+
 def scan_vault(
     root: Path,
     *,
@@ -400,7 +572,7 @@ def scan_vault(
         raise MarkdownError(
             f"prospective paths cannot be both updates and creates: {joined}"
         )
-    pending: list[_PendingNode] = []
+    pending: list[PendingNode] = []
     issues: list[ValidationIssue] = []
 
     for path in _iter_markdown_files(manifest):
@@ -443,27 +615,9 @@ def scan_vault(
             )
             continue
 
-        tags = normalize_tags(parsed.properties.get("tags"), parsed.body)
-        kind, classification_issues = _classify(
-            manifest,
-            path=relative,
-            properties=parsed.properties,
-            tags=tags,
-        )
-        issues.extend(classification_issues)
-        node = Node(
-            id=relative[:-3],
-            path=relative,
-            kind=kind,
-            title=parsed.title,
-            properties=parsed.properties,
-            tags=tags,
-            source_hash=parsed.source_hash,
-            body=parsed.body,
-            headings=parsed.headings,
-        )
-        issues.extend(_validate_fields(node, manifest))
-        pending.append(_PendingNode(node=node, body=parsed.body))
+        item, item_issues = build_pending(parsed, relative=relative, manifest=manifest)
+        issues.extend(item_issues)
+        pending.append(item)
 
     if prospective:
         joined = ", ".join(sorted(prospective))
@@ -526,151 +680,8 @@ def scan_vault(
             )
             continue
 
-        tags = normalize_tags(parsed.properties.get("tags"), parsed.body)
-        kind, classification_issues = _classify(
-            manifest,
-            path=relative,
-            properties=parsed.properties,
-            tags=tags,
-        )
-        issues.extend(classification_issues)
-        node = Node(
-            id=relative[:-3],
-            path=relative,
-            kind=kind,
-            title=parsed.title,
-            properties=parsed.properties,
-            tags=tags,
-            source_hash=parsed.source_hash,
-            body=parsed.body,
-            headings=parsed.headings,
-        )
-        issues.extend(_validate_fields(node, manifest))
-        pending.append(_PendingNode(node=node, body=parsed.body))
+        item, item_issues = build_pending(parsed, relative=relative, manifest=manifest)
+        issues.extend(item_issues)
+        pending.append(item)
 
-    node_ids = {item.node.id for item in pending}
-    basename_index: dict[str, set[str]] = {}
-    for node_id in node_ids:
-        basename_index.setdefault(PurePosixPath(node_id).name, set()).add(node_id)
-
-    completed = []
-    for item in pending:
-        edges: list[Edge] = []
-        for relation, contract in manifest.relations.items():
-            values, relation_issues = _relation_values(
-                item.node,
-                relation=relation,
-                contract=contract,
-            )
-            issues.extend(relation_issues)
-            for raw_target in values:
-                resolved = _resolve_target(
-                    raw_target,
-                    source_id=item.node.id,
-                    node_ids=node_ids,
-                    basename_index=basename_index,
-                )
-                if resolved is None:
-                    continue
-                target, source_syntax = resolved
-                edges.append(
-                    Edge(
-                        source=item.node.id,
-                        relation=relation,
-                        target=target,
-                        provenance=f"frontmatter:{contract['field']}:{source_syntax}",
-                        source_location=f"frontmatter.{contract['field']}",
-                    )
-                )
-                if target not in node_ids:
-                    issues.append(
-                        ValidationIssue(
-                            level="error",
-                            code="relation.unresolved",
-                            message=(
-                                f"relation {relation!r} targets missing node {target!r}"
-                            ),
-                            path=item.node.path,
-                        )
-                    )
-                    continue
-                target_kind = next(
-                    pending_item.node.kind
-                    for pending_item in pending
-                    if pending_item.node.id == target
-                )
-                if target_kind not in contract["targetKinds"]:
-                    issues.append(
-                        ValidationIssue(
-                            level="error",
-                            code="relation.target-kind",
-                            message=(
-                                f"relation {relation!r} cannot target kind "
-                                f"{target_kind!r}"
-                            ),
-                            path=item.node.path,
-                        )
-                    )
-
-        for raw_target, syntax in extract_body_links(item.body):
-            resolved = _resolve_target(
-                raw_target,
-                source_id=item.node.id,
-                node_ids=node_ids,
-                basename_index=basename_index,
-                syntax_hint=syntax,
-            )
-            if resolved is None:
-                continue
-            target, _ = resolved
-            edges.append(
-                Edge(
-                    source=item.node.id,
-                    relation="link",
-                    target=target,
-                    provenance=syntax,
-                )
-            )
-            if target not in node_ids:
-                issues.append(
-                    ValidationIssue(
-                        level="warning",
-                        code="link.unresolved",
-                        message=f"link targets missing node {target!r}",
-                        path=item.node.path,
-                    )
-                )
-
-        completed.append(
-            replace(
-                item.node,
-                outgoing_edges=tuple(
-                    sorted(
-                        edges,
-                        key=lambda edge: (
-                            edge.relation,
-                            edge.target,
-                            edge.provenance,
-                        ),
-                    )
-                ),
-            )
-        )
-
-    nodes = tuple(sorted(completed, key=lambda node: node.id))
-    issues.extend(_cycle_issues(nodes, manifest))
-    return ScanResult(
-        manifest=manifest,
-        nodes=nodes,
-        issues=tuple(
-            sorted(
-                issues,
-                key=lambda issue: (
-                    issue.path or "",
-                    issue.level,
-                    issue.code,
-                    issue.message,
-                ),
-            )
-        ),
-    )
+    return assemble(manifest, pending, issues)

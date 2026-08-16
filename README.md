@@ -109,6 +109,9 @@ modules.
 | `search` | Rank notes with manifest-defined zones |
 | `context` | Return ranked notes and snippets within an output budget |
 | `read` | Read one note's metadata and body by path or node id |
+| `neighbors` | List graph neighbors of one note by depth and direction |
+| `index status` | Describe the disposable read index cache |
+| `index rebuild` | Discard and rebuild the read index cache |
 | `node plan` | Plan and prospectively validate one typed create or update |
 | `node render` | Emit a current plan's exact candidate Markdown |
 | `node diff` | Emit a current plan's unified diff |
@@ -125,6 +128,11 @@ field-presence, and incoming-edge filters. It replaces committed index files
 with an on-demand projection; it does not own sessions, hooks, Git state, or
 autosave. See
 [derived node queries](docs/query.md).
+
+`search`, `context`, `query`, `read`, and `neighbors` serve repeated reads
+from an incremental SQLite cache stored outside the vault; any cache failure
+falls back to a full scan, and the global `--no-cache` flag forces one. See
+[the incremental read index](docs/read-index.md).
 
 `merge plan` is intentionally not an apply command. It reads a base/ours/theirs
 triple, records exact revisions and content hashes, applies only declarative

@@ -3,13 +3,21 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import PurePosixPath
 from typing import Any
 
 from vaultctl.errors import QueryError
-from vaultctl.model import ContextGroup, ContextResult, Node, ScanResult, SearchHit
+from vaultctl.model import (
+    ContextGroup,
+    ContextResult,
+    Node,
+    ScanResult,
+    SearchHit,
+    VaultManifest,
+)
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 TICKET_RE = re.compile(
@@ -62,12 +70,12 @@ class _RankedGroup:
     hits: tuple[SearchHit, ...]
 
 
-def _search_config(result: ScanResult) -> dict[str, Any]:
-    return result.manifest.raw.get("search", {})
+def search_config(manifest: VaultManifest) -> dict[str, Any]:
+    return manifest.raw.get("search", {})
 
 
-def _context_config(result: ScanResult) -> dict[str, Any]:
-    return result.manifest.raw.get("context", {})
+def context_config(manifest: VaultManifest) -> dict[str, Any]:
+    return manifest.raw.get("context", {})
 
 
 def tokenize(query: str, *, stop_words: frozenset[str]) -> tuple[str, ...]:
@@ -88,13 +96,13 @@ def _plain_text(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
-def _zone_name(zone: dict[str, Any]) -> str:
+def zone_name(zone: dict[str, Any]) -> str:
     if zone["source"] == "property":
         return f"property:{zone['field']}"
     return zone["source"]
 
 
-def _zone_text(node: Node, zone: dict[str, Any]) -> str:
+def zone_text(node: Node, zone: dict[str, Any]) -> str:
     source = zone["source"]
     if source == "title":
         return node.title
@@ -127,20 +135,20 @@ def _boost_matches(node: Node, boost: dict[str, Any]) -> bool:
     return PurePosixPath(node.path).match(boost["path"])
 
 
-def _resolved_zones(result: ScanResult) -> tuple[dict[str, Any], ...]:
-    configured = _search_config(result).get("zones")
+def resolved_zones(manifest: VaultManifest) -> tuple[dict[str, Any], ...]:
+    configured = search_config(manifest).get("zones")
     return tuple(configured) if configured else DEFAULT_ZONES
 
 
-def _stop_words(result: ScanResult) -> frozenset[str]:
-    config = _search_config(result)
+def stop_words(manifest: VaultManifest) -> frozenset[str]:
+    config = search_config(manifest)
     defaults = (
         DEFAULT_STOP_WORDS if config.get("useDefaultStopWords", True) else frozenset()
     )
     return defaults | frozenset(word.lower() for word in config.get("stopWords", ()))
 
 
-def _resolve_limit(
+def resolve_limit(
     *,
     requested: int | None,
     config: dict[str, Any],
@@ -159,27 +167,43 @@ def _resolve_limit(
     return limit
 
 
-def _score_node(
+STEM_MATCH_WEIGHT = 0.8
+
+
+def score_node(
     node: Node,
     *,
     phrase: str,
     tokens: tuple[str, ...],
     zones: tuple[dict[str, Any], ...],
     boosts: tuple[dict[str, Any], ...],
+    stem_counts: Callable[[int, str], int] | None = None,
 ) -> SearchHit | None:
-    score = 0
+    """Score one node with the exact zone scorer.
+
+    ``stem_counts`` optionally maps ``(zone_index, token)`` to the number of
+    stem-equivalent occurrences; a token without an exact substring match in a
+    zone then still contributes ``STEM_MATCH_WEIGHT`` of the zone weight.
+    Without ``stem_counts`` the score stays an exact integer.
+    """
+    score: float = 0
     matched = []
-    for zone in zones:
-        text = _zone_text(node, zone).lower()
-        zone_score = 0
+    for zone_index, zone in enumerate(zones):
+        text = zone_text(node, zone).lower()
+        count_cap = zone.get("countCap", 1)
+        zone_score: float = 0
         for token in tokens:
-            count = min(text.count(token), zone.get("countCap", 1))
-            zone_score += count * zone["weight"]
+            count = min(text.count(token), count_cap)
+            if count:
+                zone_score += count * zone["weight"]
+            elif stem_counts is not None:
+                stem_count = min(stem_counts(zone_index, token), count_cap)
+                zone_score += stem_count * zone["weight"] * STEM_MATCH_WEIGHT
         if tokens and phrase and phrase in text:
             zone_score += zone.get("phraseWeight", 0)
         if zone_score:
             score += zone_score
-            matched.append(_zone_name(zone))
+            matched.append(zone_name(zone))
     if score == 0:
         return None
     score += sum(boost["weight"] for boost in boosts if _boost_matches(node, boost))
@@ -195,17 +219,17 @@ def _score_node(
 
 def _rank(result: ScanResult, query: str) -> tuple[SearchHit, ...]:
     phrase = query.strip().lower()
-    tokens = tokenize(query, stop_words=_stop_words(result))
+    tokens = tokenize(query, stop_words=stop_words(result.manifest))
     hits = [
         hit
         for node in result.nodes
         if (
-            hit := _score_node(
+            hit := score_node(
                 node,
                 phrase=phrase,
                 tokens=tokens,
-                zones=_resolved_zones(result),
-                boosts=tuple(_search_config(result).get("boosts", ())),
+                zones=resolved_zones(result.manifest),
+                boosts=tuple(search_config(result.manifest).get("boosts", ())),
             )
         )
         is not None
@@ -222,8 +246,8 @@ def search(
 ) -> tuple[SearchHit, ...]:
     if not query.strip():
         raise QueryError("search query is empty")
-    config = _search_config(result)
-    resolved_limit = _resolve_limit(
+    config = search_config(result.manifest)
+    resolved_limit = resolve_limit(
         requested=limit,
         config=config,
         default=DEFAULT_SEARCH_LIMIT,
@@ -368,17 +392,20 @@ def _hit_cost(hit: SearchHit) -> int:
     return len(hit.path) + len(hit.title) + sum(len(item) for item in hit.snippets)
 
 
-def context(
-    result: ScanResult,
+def build_context_result(
+    manifest: VaultManifest,
     query: str,
     *,
+    ranked_hits: tuple[SearchHit, ...],
+    nodes: dict[str, Node],
     limit: int | None = None,
 ) -> ContextResult:
+    """Build a context result from already-ranked hits and their nodes."""
     phrase = query.strip()
     if not phrase:
         raise QueryError("context query is empty")
-    config = _context_config(result)
-    resolved_limit = _resolve_limit(
+    config = context_config(manifest)
+    resolved_limit = resolve_limit(
         requested=limit,
         config=config,
         default=DEFAULT_CONTEXT_LIMIT,
@@ -390,9 +417,7 @@ def context(
     snippet_characters = config.get("snippetCharacters", DEFAULT_SNIPPET_CHARACTERS)
     fallback_to_title = config.get("fallbackToTitle", True)
     output_fields = tuple(config.get("outputFields", ()))
-    tokens = tokenize(query, stop_words=_stop_words(result))
-    nodes = {node.id: node for node in result.nodes}
-    ranked_hits = _rank(result, query)
+    tokens = tokenize(query, stop_words=stop_words(manifest))
     used = 0
     truncated = False
     selected: list[SearchHit] = []
@@ -463,4 +488,19 @@ def context(
         max_characters=max_characters,
         used_characters=used,
         truncated=truncated,
+    )
+
+
+def context(
+    result: ScanResult,
+    query: str,
+    *,
+    limit: int | None = None,
+) -> ContextResult:
+    return build_context_result(
+        result.manifest,
+        query,
+        ranked_hits=_rank(result, query),
+        nodes={node.id: node for node in result.nodes},
+        limit=limit,
     )
