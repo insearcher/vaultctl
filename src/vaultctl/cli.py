@@ -10,7 +10,14 @@ from typing import Any
 
 from vaultctl import __version__
 from vaultctl.engine import scan_vault
-from vaultctl.errors import MarkdownError, QueryError, VaultctlError
+from vaultctl.errors import CacheError, MarkdownError, QueryError, VaultctlError
+from vaultctl.index import (
+    DEFAULT_NEIGHBOR_LIMIT,
+    index_status,
+    neighbors_from_scan,
+    open_index,
+    rebuild_index,
+)
 from vaultctl.manifest import load_manifest, resolve_vault_root
 from vaultctl.merge import load_merge_plan, plan_merge_files
 from vaultctl.model import ContextResult, Node, ScanResult, SearchHit
@@ -44,6 +51,11 @@ def _parser() -> argparse.ArgumentParser:
         choices=("json", "text"),
         default="json",
         help="Output format (default: json).",
+    )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Bypass the disposable read index and force a full vault scan.",
     )
 
     commands = parser.add_subparsers(dest="command", required=True)
@@ -96,6 +108,44 @@ def _parser() -> argparse.ArgumentParser:
         help="Read one note by vault-relative path or node id.",
     )
     read.add_argument("target")
+
+    neighbors = commands.add_parser(
+        "neighbors",
+        help="List graph neighbors of one note by path or node id.",
+    )
+    neighbors.add_argument("target")
+    neighbors.add_argument(
+        "--depth",
+        type=int,
+        default=1,
+        help="Traversal depth between 1 and 3 (default: 1).",
+    )
+    neighbors.add_argument(
+        "--direction",
+        choices=("in", "out", "both"),
+        default="both",
+        help="Edge direction to follow (default: both).",
+    )
+    neighbors.add_argument(
+        "--limit",
+        type=int,
+        default=DEFAULT_NEIGHBOR_LIMIT,
+        help=f"Maximum neighbors returned (default: {DEFAULT_NEIGHBOR_LIMIT}).",
+    )
+
+    index = commands.add_parser(
+        "index",
+        help="Disposable read index operations.",
+    )
+    index_commands = index.add_subparsers(dest="index_command", required=True)
+    index_commands.add_parser(
+        "status",
+        help="Describe the read index cache for this vault.",
+    )
+    index_commands.add_parser(
+        "rebuild",
+        help="Discard and rebuild the read index cache from a full parse.",
+    )
 
     graph = commands.add_parser("graph", help="Graph operations.")
     graph_commands = graph.add_subparsers(dest="graph_command", required=True)
@@ -318,6 +368,13 @@ def _read_note_source(result: ScanResult, node: Node) -> str:
 
 def _doctor_payload(root: Path) -> dict[str, Any]:
     manifest = load_manifest(root)
+    status = index_status(root, pending=False)
+    cache: dict[str, Any] = {
+        "present": status["exists"],
+        "path": status["path"],
+    }
+    if status["exists"]:
+        cache["current"] = bool(status.get("readable")) and bool(status.get("current"))
     return {
         "schemaVersion": "vaultctl.doctor/v1",
         "vaultId": manifest.vault_id,
@@ -330,7 +387,126 @@ def _doctor_payload(root: Path) -> dict[str, Any]:
                 "required": False,
             },
         },
+        "cache": cache,
     }
+
+
+def _index_status_payload(root: Path) -> dict[str, Any]:
+    manifest = load_manifest(root)
+    return {
+        "schemaVersion": "vaultctl.index-status/v1",
+        "vaultId": manifest.vault_id,
+        "root": str(root),
+        "valid": True,
+        "cache": index_status(root),
+    }
+
+
+def _neighbors_payload(
+    result_like: ScanResult,
+    *,
+    data: dict[str, Any],
+    depth: int,
+    direction: str,
+    limit: int,
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": "vaultctl.neighbors/v1",
+        "vaultId": result_like.manifest.vault_id,
+        "root": str(result_like.manifest.root),
+        "valid": not result_like.errors,
+        "target": data["target"],
+        "depth": depth,
+        "direction": direction,
+        "limit": limit,
+        "neighbors": data["neighbors"],
+        "truncated": data["truncated"],
+        "issues": [issue.to_dict() for issue in result_like.issues],
+    }
+
+
+def _neighbors_command_payload(
+    root: Path,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    if not args.no_cache:
+        index = open_index(root)
+        if index is not None:
+            try:
+                data = index.neighbors_data(
+                    args.target,
+                    depth=args.depth,
+                    direction=args.direction,
+                    limit=args.limit,
+                )
+                result_like = index.lite_result()
+            except CacheError:
+                pass
+            else:
+                return _neighbors_payload(
+                    result_like,
+                    data=data,
+                    depth=args.depth,
+                    direction=args.direction,
+                    limit=args.limit,
+                )
+            finally:
+                index.close()
+    result = scan_vault(root)
+    data = neighbors_from_scan(
+        result,
+        args.target,
+        depth=args.depth,
+        direction=args.direction,
+        limit=args.limit,
+    )
+    return _neighbors_payload(
+        result,
+        data=data,
+        depth=args.depth,
+        direction=args.direction,
+        limit=args.limit,
+    )
+
+
+def _cached_search_payload(
+    root: Path,
+    args: argparse.Namespace,
+) -> dict[str, Any] | None:
+    """Serve search or context from the read index; None means fall back."""
+    index = open_index(root)
+    if index is None:
+        return None
+    try:
+        if args.command == "search":
+            hits = index.search_hits(args.query, limit=args.limit)
+            return _search_payload(
+                index.lite_result(),
+                query=args.query,
+                hits=hits,
+            )
+        context_result = index.context_result(args.query, limit=args.limit)
+        return _context_payload(
+            index.lite_result(),
+            query=args.query,
+            context_result=context_result,
+        )
+    except CacheError:
+        return None
+    finally:
+        index.close()
+
+
+def _cached_scan_result(root: Path) -> ScanResult | None:
+    index = open_index(root)
+    if index is None:
+        return None
+    try:
+        return index.scan_result()
+    except CacheError:
+        return None
+    finally:
+        index.close()
 
 
 def _render_text(payload: dict[str, Any]) -> str:
@@ -354,11 +530,46 @@ def _render_text(payload: dict[str, Any]) -> str:
         return "\n".join(lines)
     if schema == "vaultctl.doctor/v1":
         live = payload["backends"]["obsidianLive"]["available"]
+        cache = payload["cache"]
+        if not cache["present"]:
+            cache_state = "absent"
+        elif cache.get("current"):
+            cache_state = "current"
+        else:
+            cache_state = "stale"
         return (
             f"vault {payload['vaultId']}: ok\n"
             f"filesystem backend: available\n"
-            f"obsidian live backend: {'available' if live else 'unavailable'}"
+            f"obsidian live backend: {'available' if live else 'unavailable'}\n"
+            f"read index cache: {cache_state}"
         )
+    if schema == "vaultctl.index-status/v1":
+        cache = payload["cache"]
+        if not cache["exists"]:
+            return f"read index: absent ({cache['path']})"
+        if not cache.get("readable", False):
+            return f"read index: unreadable ({cache['path']})"
+        state = "current" if cache.get("current") else "stale"
+        pending = cache.get("pendingChanges", {})
+        return (
+            f"read index: {state} ({cache['path']})\n"
+            f"nodes {cache['nodes']}, terms {cache['terms']}, "
+            f"edges {cache['edges']}, postings {cache['postings']}\n"
+            f"pending changes: {pending.get('changed', 0)} changed, "
+            f"{pending.get('removed', 0)} removed"
+        )
+    if schema == "vaultctl.neighbors/v1":
+        if not payload["neighbors"]:
+            return "No neighbors."
+        lines = []
+        for item in payload["neighbors"]:
+            joined = ", ".join(
+                f"{edge['field']}:{edge['direction']}" for edge in item["edges"]
+            )
+            lines.append(
+                f"{item['distance']}  {item['path']} — {item['title']} ({joined})"
+            )
+        return "\n".join(lines)
     if schema == "vaultctl.graph/v1":
         return (
             f"graph: {len(payload['nodes'])} node(s), {len(payload['edges'])} edge(s)"
@@ -490,8 +701,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             receipt = apply_node_mutation_plan(manifest, plan)
             _emit(receipt.to_dict(), args.format)
             return 0 if receipt.state == "applied" else 1
+        if args.command == "index":
+            if args.index_command == "rebuild":
+                rebuild_index(root).close()
+            _emit(_index_status_payload(root), args.format)
+            return 0
+        if args.command == "neighbors":
+            _emit(_neighbors_command_payload(root, args), args.format)
+            return 0
+        if args.command in {"search", "context"} and not args.no_cache:
+            payload = _cached_search_payload(root, args)
+            if payload is not None:
+                _emit(payload, args.format)
+                return 0
 
-        result = scan_vault(root)
+        result = None
+        if args.command in {"query", "read"} and not args.no_cache:
+            result = _cached_scan_result(root)
+        if result is None:
+            result = scan_vault(root)
         if args.command == "read":
             node = _read_node(result, args.target)
             if args.format == "text":
