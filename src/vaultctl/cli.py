@@ -543,13 +543,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             payload = _graph_payload(result)
         _emit(payload, args.format)
-        if result.errors:
-            return 1
-        if args.command in {"search", "context"} and not payload["hits"]:
-            return 1
-        if args.command == "query" and not payload["nodes"]:
-            return 1
-        return 0
+        if args.command in {"search", "context", "query"}:
+            return 0
+        return 1 if result.errors else 0
     except VaultctlError as exc:
         if args.format == "json":
             print(

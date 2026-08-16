@@ -214,12 +214,12 @@ def test_query_cli_parses_typed_json_values(make_vault, capsys) -> None:
     assert payload["filters"]["properties"][0]["value"] == 2
 
 
-def test_query_cli_returns_one_for_no_matches(make_vault, capsys) -> None:
+def test_query_cli_returns_success_for_no_matches(make_vault, capsys) -> None:
     root = _query_vault(make_vault)
 
     exit_code = main(["--vault", str(root), "query", "--where", "status=missing"])
 
-    assert exit_code == 1
+    assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["nodes"] == []
 

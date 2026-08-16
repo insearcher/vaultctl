@@ -196,7 +196,10 @@ def test_search_limit_error_uses_error_contract(make_vault, capsys) -> None:
     assert "exceeds manifest maxLimit" in payload["error"]
 
 
-def test_stopword_only_search_and_context_are_no_hit(make_vault, capsys) -> None:
+def test_stopword_only_search_and_context_are_empty_success(
+    make_vault,
+    capsys,
+) -> None:
     root = make_vault(
         notes={
             "notes/example.md": (
@@ -211,10 +214,48 @@ def test_stopword_only_search_and_context_are_no_hit(make_vault, capsys) -> None
     context_exit = main(["--vault", str(root), "context", "and"])
     context_payload = json.loads(capsys.readouterr().out)
 
-    assert search_exit == 1
+    assert search_exit == 0
     assert search_payload["hits"] == []
-    assert context_exit == 1
+    assert context_exit == 0
     assert context_payload["hits"] == []
+
+
+def test_search_and_context_report_hits_despite_invalid_notes(
+    make_vault,
+    capsys,
+) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Example\n\nRelease planning details.\n"
+            ),
+            "notes/broken.md": "---\ntags: [unclosed\n",
+        }
+    )
+
+    search_exit = main(["--vault", str(root), "search", "release"])
+    search_payload = json.loads(capsys.readouterr().out)
+    context_exit = main(["--vault", str(root), "context", "release"])
+    context_payload = json.loads(capsys.readouterr().out)
+
+    assert search_exit == 0
+    assert search_payload["valid"] is False
+    assert search_payload["hits"][0]["path"] == "notes/example.md"
+    assert context_exit == 0
+    assert context_payload["valid"] is False
+    assert context_payload["hits"][0]["path"] == "notes/example.md"
+    assert any(issue["code"] == "markdown.parse" for issue in context_payload["issues"])
+
+
+def test_validate_still_fails_for_invalid_notes(make_vault, capsys) -> None:
+    root = make_vault(notes={"notes/broken.md": "---\ntags: [unclosed\n"})
+
+    exit_code = main(["--vault", str(root), "validate"])
+
+    assert exit_code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["valid"] is False
 
 
 def test_merge_plan_cli_is_read_only_and_versioned(make_vault, capsys) -> None:
