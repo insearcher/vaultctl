@@ -31,6 +31,7 @@ from vaultctl.mutation import (
 )
 from vaultctl.query import query_nodes
 from vaultctl.search import context as build_context
+from vaultctl.search import context_properties_text
 from vaultctl.search import search as search_nodes
 from vaultctl.transaction import validate_merge_plan
 
@@ -599,10 +600,14 @@ def _render_text(payload: dict[str, Any]) -> str:
                 )
                 for hit in group["hits"]:
                     lines.append(f"  - {hit['path']} ({hit['score']}) — {hit['title']}")
+                    if properties := context_properties_text(hit["properties"]):
+                        lines.append(f"    {properties}")
                     lines.extend(f"    {snippet}" for snippet in hit["snippets"])
         else:
             for hit in payload["hits"]:
                 lines.append(f"- {hit['path']} ({hit['score']}) — {hit['title']}")
+                if properties := context_properties_text(hit["properties"]):
+                    lines.append(f"  {properties}")
                 lines.extend(f"  {snippet}" for snippet in hit["snippets"])
         budget = payload["budget"]
         lines.append(

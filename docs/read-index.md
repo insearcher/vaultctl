@@ -67,8 +67,10 @@ Cached search is a candidate/rescore pipeline:
    the exact manifest zone scorer, including phrase bonuses and boosts, so
    the final ranking keeps the established search semantics.
 
-With stemming disabled and freshness weight `0`, cached results are identical
-to `--no-cache` results for token queries. Candidate recall is term-based:
+Freshness rescoring is shared with `--no-cache` and cache-error fallback.
+With stemming disabled, cached and full-scan scores agree for the same
+candidates. The cache rescores at most 200 candidates, so this is not a promise
+of identical results for every corpus or query. Candidate recall is term-based:
 a query token that appears only in the middle of longer words (and shares no
 stem or prefix with them) can be missed by the candidate stage, while the
 full scan's substring scorer would still match it.
@@ -91,15 +93,19 @@ matches. Stemming is on by default and can be disabled in the manifest:
 
 ## Freshness
 
-Cached rankings multiply each score by
+Both cached and full-scan rankings multiply each score by
 
 ```
 1 + weight × 0.5^(ageDays / halfLifeDays)
 ```
 
-where the age comes from the note's `updated` property, then `created`, then
-the file mtime. Defaults (`halfLifeDays: 90`, `weight: 0.15`) are active
-without any manifest section and can be tuned or disabled:
+where the age comes from the first valid `updated` or `created` property
+(ISO date or the date prefix of an ISO timestamp). Unknown or invalid dates
+receive no freshness boost. File mtime is used only for cache invalidation;
+copying or touching identical notes cannot make their knowledge newer.
+The evaluation day is captured once per query in UTC, and future dates have
+age zero. Defaults (`halfLifeDays: 90`, `weight: 0.15`) are active without any
+manifest section and can be tuned or disabled:
 
 ```json
 {

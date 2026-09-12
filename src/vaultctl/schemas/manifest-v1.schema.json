@@ -296,6 +296,15 @@
         },
         "grouping": {
           "$ref": "#/$defs/contextGrouping"
+        },
+        "preferredSections": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "uniqueItems": true
         }
       }
     },

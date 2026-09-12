@@ -82,3 +82,23 @@ candidate source hash, and before/final file states. Its state is `applied`,
 `vaultctl.receipt/v1` remains specific to the internal synthetic
 semantic-merge transaction boundary. It additionally binds exact merge input
 revisions. There is no public semantic-merge apply command.
+
+## Retrieval policy in 0.1.0a2
+
+`vaultctl/v1` adds optional `context.preferredSections`. Existing manifests
+remain valid. Earlier engines reject this unknown field rather than silently
+ignoring it; update every consumer engine before sharing a manifest that uses
+it. `context.outputFields` already exists, and now appears consistently in
+text as well as JSON context.
+
+The `vaultctl.search/v1` and `vaultctl.context/v1` payload shapes are unchanged.
+Freshness is now shared by cached and full-scan scoring and uses explicit note
+dates only, evaluated on one UTC day per query. Undated notes no longer receive
+an mtime-based boost. Context budget accounting now includes projected
+properties. Consumers comparing scores, selected hits, or character totals
+should rerun their compatibility cases rather than assuming old rankings.
+
+The CLI package version changes from `0.1.0a1` to `0.1.0a2`, invalidating older
+read caches through their existing `engineVersion` metadata. Cache schema `1`
+remains unchanged: filesystem timestamps still detect changed files, and
+scores and snippets are derived anew at query time.

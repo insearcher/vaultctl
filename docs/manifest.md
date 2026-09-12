@@ -121,7 +121,8 @@ adds `phraseWeight` for the complete query phrase.
     "snippetLines": 2,
     "snippetCharacters": 220,
     "fallbackToTitle": true,
-    "outputFields": ["status", "updated"]
+    "outputFields": ["status", "updated"],
+    "preferredSections": ["Current state", "Decision"]
   }
 }
 ```
@@ -161,9 +162,9 @@ vault-relative path glob:
 Boosts never create a hit by themselves. They only refine deterministic
 ordering among nodes that already match the query.
 
-Cached rankings additionally support Snowball stemming and a freshness
-multiplier via `search.stemming` and `search.freshness`; both are active by
-default and documented in
+Cached rankings additionally support Snowball stemming via `search.stemming`.
+Both cached and full-scan rankings support `search.freshness`; these features
+are active by default and documented in
 [the incremental read index](read-index.md).
 
 When no search configuration is present, `vaultctl` uses a stable built-in
@@ -171,6 +172,25 @@ general-purpose scorer. Context reuses the search ranking and adds matching
 body lines without exceeding the manifest's content-character budget. When a
 matching body line is absent, `fallbackToTitle` controls whether the note title
 is returned as a fallback snippet.
+
+`preferredSections` optionally selects a declared current section before
+query-matching lines. Names match complete ATX headings (`#` through `######`)
+case-insensitively, ignoring surrounding whitespace and optional closing hashes.
+The first configured name present in the note selects the section. Its
+content includes subsections and ends at the next heading of equal or higher
+level. Headings, fenced code blocks, and HTML comments do not become snippet
+lines. Setext headings are not recognized by this selector.
+
+Selected section lines need not contain query tokens: a correction can use
+different words from the historical claim that matched. A short section is
+never padded with historical matches. Missing sections fall through to the
+next configured name, then to the normal matching-line behavior. A present
+but empty section or a repeated configured heading omits snippets,
+and the caller must read the full note instead of receiving a historical fallback.
+An omitted or empty list preserves the previous behavior. `snippetLines: 0`
+disables snippets even when a preferred section exists. The usual line,
+line-length, and total content budgets still apply. This is an explicit
+presentation policy, not an inference that the selected text is true or current.
 
 Context may also group ranked notes without changing search scoring:
 
@@ -201,6 +221,12 @@ first, followed by the freshest ISO date, score, and path. The response keeps
 both the freshness-selected `representative` and a distinct relevance-selected
 `topMatch` when needed. `outputFields` is an explicit allowlist of frontmatter
 properties to project into context hits; unspecified properties stay internal.
+The same allowed properties appear in JSON and text output, including grouped
+hits. Text renders them on one `properties:` line as compact, sorted JSON.
+The content-character budget includes that line as well as each hit's path,
+title, and snippets; it does not count presentation indentation or JSON envelope
+syntax. A hit whose projected fields exceed the remaining budget is omitted
+and the result is marked truncated.
 
 ## Semantic merge policy
 

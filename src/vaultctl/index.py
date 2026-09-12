@@ -16,8 +16,7 @@ import os
 import re
 import sqlite3
 from collections import Counter
-from dataclasses import replace
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from functools import cache, lru_cache
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -50,7 +49,9 @@ from vaultctl.search import (
     MAX_SEARCH_LIMIT,
     STEM_MATCH_WEIGHT,
     TOKEN_RE,
+    apply_freshness,
     build_context_result,
+    ranking_date,
     resolve_limit,
     resolved_zones,
     score_node,
@@ -63,8 +64,6 @@ from vaultctl.search import (
 CACHE_SCHEMA_VERSION = "1"
 CANDIDATE_LIMIT = 200
 STEM_PREFIX = "s:"
-DEFAULT_FRESHNESS_HALF_LIFE_DAYS = 90.0
-DEFAULT_FRESHNESS_WEIGHT = 0.15
 MAX_NEIGHBOR_DEPTH = 3
 DEFAULT_NEIGHBOR_LIMIT = 20
 CYRILLIC_RE = re.compile(r"[Ѐ-ӿ]")
@@ -241,36 +240,6 @@ def _date_property(properties: dict[str, Any], key: str) -> str | None:
     if isinstance(value, str) and value:
         return value
     return None
-
-
-def _age_days(
-    updated: str | None,
-    created: str | None,
-    mtime_ns: int | None,
-    today: date,
-) -> float:
-    for value in (updated, created):
-        if not value:
-            continue
-        try:
-            known = date.fromisoformat(value[:10])
-        except ValueError:
-            continue
-        return float(max((today - known).days, 0))
-    if mtime_ns is not None:
-        try:
-            known = date.fromtimestamp(mtime_ns / 1_000_000_000)
-        except (OSError, OverflowError, ValueError):
-            return 0.0
-        return float(max((today - known).days, 0))
-    return 0.0
-
-
-def _normalized_score(value: float) -> float:
-    rounded = round(value, 3)
-    if isinstance(rounded, float) and rounded.is_integer():
-        return int(rounded)
-    return rounded
 
 
 class VaultIndex:
@@ -711,14 +680,13 @@ class VaultIndex:
             return (), {}
         paths = [path for path, _ in candidates]
         ids_by_path = dict(candidates)
-        nodes, mtimes = self._load_nodes(paths)
+        nodes = self._load_nodes(paths)
         stem_counts = (
             self._stem_counts([file_id for _, file_id in candidates], tokens)
             if stemming and tokens
             else {}
         )
-        half_life, weight = self._freshness_config(config)
-        today = date.today()
+        as_of = ranking_date()
         hits = []
         for path in paths:
             node = nodes.get(path)
@@ -743,25 +711,9 @@ class VaultIndex:
             )
             if hit is None:
                 continue
-            score = float(hit.score)
-            if weight > 0:
-                age = _age_days(
-                    _date_property(node.properties, "updated"),
-                    _date_property(node.properties, "created"),
-                    mtimes.get(path),
-                    today,
-                )
-                score *= 1.0 + weight * 0.5 ** (age / half_life)
-            hits.append(replace(hit, score=_normalized_score(score)))
+            hits.append(apply_freshness(hit, node, config, as_of=as_of))
         hits.sort(key=lambda hit: (-hit.score, hit.path))
         return tuple(hits), {node.id: node for node in nodes.values()}
-
-    @staticmethod
-    def _freshness_config(config: dict[str, Any]) -> tuple[float, float]:
-        section = config.get("freshness", {})
-        half_life = float(section.get("halfLifeDays", DEFAULT_FRESHNESS_HALF_LIFE_DAYS))
-        weight = float(section.get("weight", DEFAULT_FRESHNESS_WEIGHT))
-        return half_life, weight
 
     def _candidate_paths(
         self,
@@ -859,9 +811,8 @@ class VaultIndex:
     def _load_nodes(
         self,
         paths: list[str],
-    ) -> tuple[dict[str, Node], dict[str, int]]:
+    ) -> dict[str, Node]:
         nodes: dict[str, Node] = {}
-        mtimes: dict[str, int] = {}
         for chunk_start in range(0, len(paths), 500):
             chunk = paths[chunk_start : chunk_start + 500]
             placeholders = ", ".join("?" for _ in chunk)
@@ -881,12 +832,7 @@ class VaultIndex:
                     body=row[7],
                     headings=tuple(json.loads(row[8])),
                 )
-            for path, mtime_ns in self._connection.execute(
-                f"SELECT path, mtime_ns FROM files WHERE path IN ({placeholders})",
-                chunk,
-            ):
-                mtimes[path] = mtime_ns
-        return nodes, mtimes
+        return nodes
 
     def _stem_counts(
         self,

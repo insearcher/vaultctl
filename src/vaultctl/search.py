@@ -4,8 +4,8 @@ import json
 import re
 from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timezone
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -58,6 +58,8 @@ MAX_CONTEXT_LIMIT = 20
 DEFAULT_CONTEXT_CHARACTERS = 12000
 DEFAULT_SNIPPET_LINES = 2
 DEFAULT_SNIPPET_CHARACTERS = 220
+DEFAULT_FRESHNESS_HALF_LIFE_DAYS = 90.0
+DEFAULT_FRESHNESS_WEIGHT = 0.15
 
 
 @dataclass(frozen=True)
@@ -217,11 +219,47 @@ def score_node(
     )
 
 
+def ranking_date() -> date:
+    """Use one shared day boundary on hosts in different time zones."""
+    return datetime.now(timezone.utc).date()
+
+
+def apply_freshness(
+    hit: SearchHit,
+    node: Node,
+    config: dict[str, Any],
+    *,
+    as_of: date,
+) -> SearchHit:
+    section = config.get("freshness", {})
+    weight = float(section.get("weight", DEFAULT_FRESHNESS_WEIGHT))
+    score = float(hit.score)
+    if weight > 0:
+        for field in ("updated", "created"):
+            value = node.properties.get(field)
+            if not isinstance(value, str) or not value:
+                continue
+            try:
+                known = date.fromisoformat(value[:10])
+            except ValueError:
+                continue
+            age = max((as_of - known).days, 0)
+            half_life = float(
+                section.get("halfLifeDays", DEFAULT_FRESHNESS_HALF_LIFE_DAYS)
+            )
+            score *= 1.0 + weight * 0.5 ** (age / half_life)
+            break
+    rounded = round(score, 3)
+    return replace(hit, score=int(rounded) if rounded.is_integer() else rounded)
+
+
 def _rank(result: ScanResult, query: str) -> tuple[SearchHit, ...]:
     phrase = query.strip().lower()
     tokens = tokenize(query, stop_words=stop_words(result.manifest))
+    config = search_config(result.manifest)
+    as_of = ranking_date()
     hits = [
-        hit
+        apply_freshness(hit, node, config, as_of=as_of)
         for node in result.nodes
         if (
             hit := score_node(
@@ -257,6 +295,77 @@ def search(
     return _rank(result, query)[:resolved_limit]
 
 
+def _preferred_section_lines(
+    body: str, preferred_sections: tuple[str, ...]
+) -> tuple[str, ...] | None:
+    if not preferred_sections:
+        return ()
+    lines = body.splitlines()
+    headings: list[tuple[int, int, str]] = []
+    content: dict[int, str] = {}
+    fence: tuple[str, int] | None = None
+    comment = False
+    for index, raw_line in enumerate(lines):
+        marker = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", raw_line)
+        if fence is not None:
+            if (
+                marker is not None
+                and marker[1][0] == fence[0]
+                and len(marker[1]) >= fence[1]
+                and not marker[2].strip()
+            ):
+                fence = None
+            continue
+        if marker is not None and not comment:
+            fence = (marker[1][0], len(marker[1]))
+            continue
+        visible = ""
+        remaining = raw_line
+        while remaining:
+            if comment:
+                end = remaining.find("-->")
+                if end < 0:
+                    break
+                remaining = remaining[end + 3 :]
+                comment = False
+            else:
+                start = remaining.find("<!--")
+                inline = re.search(r"(?<!`)(`+)(?!`)(.*?)(?<!`)\1(?!`)", remaining)
+                if inline is not None and (start < 0 or inline.start() < start):
+                    visible += remaining[: inline.end()]
+                    remaining = remaining[inline.end() :]
+                    continue
+                if start < 0:
+                    visible += remaining
+                    break
+                visible += remaining[:start]
+                remaining = remaining[start + 4 :]
+                comment = True
+        raw_line = visible
+        heading = re.match(r"^ {0,3}(#{1,6})(?:[ \t]+(.*))?$", raw_line)
+        if heading is not None:
+            title = re.sub(r"[ \t]+#+[ \t]*$", "", heading[2] or "").strip()
+            headings.append((index, len(heading[1]), title.casefold()))
+        elif raw_line.strip():
+            content[index] = raw_line.strip()
+    for preferred in preferred_sections:
+        matches = [item for item in headings if item[2] == preferred.strip().casefold()]
+        if len(matches) > 1:
+            return None
+        if len(matches) != 1:
+            continue
+        start, level, _ = matches[0]
+        end = next(
+            (index for index, depth, _ in headings if index > start and depth <= level),
+            len(lines),
+        )
+        selected = tuple(line for index, line in content.items() if start < index < end)
+        if selected:
+            return selected
+        return None
+    return ()
+
+
 def _snippets(
     node: Node,
     *,
@@ -264,9 +373,15 @@ def _snippets(
     max_lines: int,
     max_characters: int,
     fallback_to_title: bool,
+    preferred_sections: tuple[str, ...],
 ) -> tuple[str, ...]:
     if max_lines == 0:
         return ()
+    preferred = _preferred_section_lines(node.body, preferred_sections)
+    if preferred is None:
+        return ()
+    if preferred:
+        return tuple(line[:max_characters] for line in preferred[:max_lines])
     snippets = []
     for raw_line in node.body.splitlines():
         line = raw_line.strip()
@@ -365,6 +480,7 @@ def _context_hit(
     snippet_characters: int,
     fallback_to_title: bool,
     output_fields: tuple[str, ...],
+    preferred_sections: tuple[str, ...],
 ) -> SearchHit:
     return SearchHit(
         node_id=hit.node_id,
@@ -379,6 +495,7 @@ def _context_hit(
             max_lines=snippet_lines,
             max_characters=snippet_characters,
             fallback_to_title=fallback_to_title,
+            preferred_sections=preferred_sections,
         ),
         properties={
             field: node.properties[field]
@@ -388,8 +505,22 @@ def _context_hit(
     )
 
 
+def context_properties_text(properties: dict[str, Any]) -> str:
+    if not properties:
+        return ""
+    serialized = json.dumps(
+        properties, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return f"properties: {serialized}"
+
+
 def _hit_cost(hit: SearchHit) -> int:
-    return len(hit.path) + len(hit.title) + sum(len(item) for item in hit.snippets)
+    return (
+        len(hit.path)
+        + len(hit.title)
+        + sum(len(item) for item in hit.snippets)
+        + len(context_properties_text(hit.properties))
+    )
 
 
 def build_context_result(
@@ -417,6 +548,7 @@ def build_context_result(
     snippet_characters = config.get("snippetCharacters", DEFAULT_SNIPPET_CHARACTERS)
     fallback_to_title = config.get("fallbackToTitle", True)
     output_fields = tuple(config.get("outputFields", ()))
+    preferred_sections = tuple(config.get("preferredSections", ()))
     tokens = tokenize(query, stop_words=stop_words(manifest))
     used = 0
     truncated = False
@@ -439,6 +571,7 @@ def build_context_result(
                     snippet_characters=snippet_characters,
                     fallback_to_title=fallback_to_title,
                     output_fields=output_fields,
+                    preferred_sections=preferred_sections,
                 )
                 cost = _hit_cost(rendered)
                 if used + cost > max_characters:
@@ -472,6 +605,7 @@ def build_context_result(
                 snippet_characters=snippet_characters,
                 fallback_to_title=fallback_to_title,
                 output_fields=output_fields,
+                preferred_sections=preferred_sections,
             )
             cost = _hit_cost(rendered)
             if used + cost > max_characters:
