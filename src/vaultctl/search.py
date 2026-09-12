@@ -295,11 +295,7 @@ def search(
     return _rank(result, query)[:resolved_limit]
 
 
-def _preferred_section_lines(
-    body: str, preferred_sections: tuple[str, ...]
-) -> tuple[str, ...] | None:
-    if not preferred_sections:
-        return ()
+def _excerpt_content(body: str) -> tuple[list[tuple[int, int, str]], dict[int, str]]:
     lines = body.splitlines()
     headings: list[tuple[int, int, str]] = []
     content: dict[int, str] = {}
@@ -348,6 +344,15 @@ def _preferred_section_lines(
             headings.append((index, len(heading[1]), title.casefold()))
         elif raw_line.strip():
             content[index] = raw_line.strip()
+    return headings, content
+
+
+def _preferred_section_lines(
+    body: str, preferred_sections: tuple[str, ...]
+) -> tuple[str, ...] | None:
+    if not preferred_sections:
+        return ()
+    headings, content = _excerpt_content(body)
     for preferred in preferred_sections:
         matches = [item for item in headings if item[2] == preferred.strip().casefold()]
         if len(matches) > 1:
@@ -357,7 +362,7 @@ def _preferred_section_lines(
         start, level, _ = matches[0]
         end = next(
             (index for index, depth, _ in headings if index > start and depth <= level),
-            len(lines),
+            len(body.splitlines()),
         )
         selected = tuple(line for index, line in content.items() if start < index < end)
         if selected:
@@ -383,10 +388,7 @@ def _snippets(
     if preferred:
         return tuple(line[:max_characters] for line in preferred[:max_lines])
     snippets = []
-    for raw_line in node.body.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
+    for line in _excerpt_content(node.body)[1].values():
         lowered = line.lower()
         if tokens and not any(token in lowered for token in tokens):
             continue

@@ -259,6 +259,25 @@ def test_stopword_only_query_has_no_search_or_context_hits(make_vault) -> None:
     assert context(result, "when").hits == ()
 
 
+def test_context_fallback_excerpts_skip_structure_comments_and_code(make_vault) -> None:
+    root = make_vault(
+        notes={
+            "notes/example.md": (
+                "---\ntags: []\nrelated: []\n---\n"
+                "# Routing\n\n## Routing history\n"
+                "<!-- Routing obsolete hidden claim. -->\n"
+                "```md\nRouting code sample.\n```\n"
+                "Routing uses the confirmed endpoint.\n"
+                "Routing accepts `<!--` as literal input.\n"
+            )
+        }
+    )
+    assert context(scan_vault(root), "routing").hits[0].snippets == (
+        "Routing uses the confirmed endpoint.",
+        "Routing accepts `<!--` as literal input.",
+    )
+
+
 def test_context_can_disable_title_fallback(make_vault) -> None:
     root = make_vault(
         manifest_overrides={

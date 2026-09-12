@@ -187,7 +187,9 @@ never padded with historical matches. Missing sections fall through to the
 next configured name, then to the normal matching-line behavior. A present
 but empty section or a repeated configured heading omits snippets,
 and the caller must read the full note instead of receiving a historical fallback.
-An omitted or empty list preserves the previous behavior. `snippetLines: 0`
+An omitted or empty list uses query-matching body excerpts. These also skip
+headings, fenced code and HTML comments, leaving the title fallback available
+when configured. `snippetLines: 0`
 disables snippets even when a preferred section exists. The usual line,
 line-length, and total content budgets still apply. This is an explicit
 presentation policy, not an inference that the selected text is true or current.
